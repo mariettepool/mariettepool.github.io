@@ -134,7 +134,6 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 .notes-saved{font-size:11px;color:var(--green);margin-top:6px;height:14px;font-weight:500;}
 .loading{text-align:center;padding:2rem;color:var(--muted);font-size:13px;}
 .error-box{background:#FCEBEB;border:1.5px solid #F09595;border-radius:var(--radius);padding:12px 14px;font-size:13px;color:#791F1F;margin-bottom:1rem;line-height:1.6;}
-.info-box{background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--blue-text);margin-bottom:1rem;line-height:1.6;}
 </style>
 </head>
 <body>
@@ -147,10 +146,7 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
       <span class="sync-status" id="sync-status"></span>
     </div>
   </div>
-  <div id="host-warning" class="info-box" style="display:none;">
-    ⚠️ <strong>Running as a local file.</strong> Data may not load correctly. 
-    For best results, <strong>host this file online for free</strong> — see the instructions in the download package.
-  </div>
+
   <div class="upcoming-banner">
     <div class="banner-title">Coming up in the next 7 days</div>
     <div id="banner-items"><span style="font-size:12px;color:var(--pink-text);">Loading...</span></div>
@@ -178,10 +174,7 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 </div>
 
 <script>
-// ── Detect local file and show warning ──
-if (location.protocol === 'file:') {
-  document.getElementById('host-warning').style.display = 'block';
-}
+
 
 // ── Apps Script relay URL (no CORS issues, no publishing needed) ──
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFyP9N0xbaeeORsbkSnZxQU9vr-nMG1Ve90qP7gZkbl9dxMyAMiiJhIyfQzg1Kq2cZ/exec';
@@ -218,8 +211,8 @@ function getWK(){ return parsed ? parsed.weekStart : 'def'; }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(s){
   if(!s)return'';
-  const d=new Date(s);
-  if(isNaN(d))return s;
+  const d = s instanceof Date ? s : new Date(s);
+  if(isNaN(d))return String(s);
   return d.getDate()+' '+d.toLocaleString('en-ZA',{month:'long'});
 }
 
@@ -240,6 +233,14 @@ function parseCSV(text){
 function cl(v){ return (v||'').replace(/^"|"$/g,'').trim(); }
 function isTRUE(v){ return cl(v).toUpperCase()==='TRUE'; }
 
+function sanitizeTime(s) {
+  if (!s) return '';
+  // If it looks like a full date (e.g. "Dec 31, 1899" or "Jan 1, 1900"), strip it
+  if (/\b(18|19)\d{2}\b/.test(s)) return '';
+  // If it's a valid HH:mm pattern, keep it
+  return s;
+}
+
 function parseWeekly(rows){
   const d={weekStart:'',weekEnd:'',dates:[],focus:[],dinner:[],events:[],tasks:[],habits:[],habitPct:[],cleaning:[],todos:[]};
   const r=rows;
@@ -248,7 +249,7 @@ function parseWeekly(rows){
   DAY_COLS.forEach(c=>d.dinner.push(r[8]?cl(r[8][c]):''));
   DAY_COLS.forEach((c)=>{
     const evts=[];
-    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:cl(r[ri][c+1]),end:cl(r[ri][c+2])});}
+    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:sanitizeTime(cl(r[ri][c+1])),end:sanitizeTime(cl(r[ri][c+2]))});}
     d.events.push(evts);
   });
   const taskRows=[];
@@ -345,7 +346,7 @@ async function loadAndRender(){
 
   if (weeklyOk) {
     document.getElementById('week-range').textContent =
-      (parsed.weekStart && parsed.weekEnd) ? parsed.weekStart + ' – ' + parsed.weekEnd : '';
+      (parsed.weekStart && parsed.weekEnd) ? fmtDate(parsed.weekStart) + ' – ' + fmtDate(parsed.weekEnd) : '';
     const today = new Date();
     activeDay = 0;
     parsed.dates.forEach((d,i) => {
@@ -362,21 +363,54 @@ async function loadAndRender(){
 
 function renderBanner(){
   const el = document.getElementById('banner-items');
-  if (!calMonths.length) {
-    el.innerHTML = `<span style="font-size:12px;color:var(--pink-text);">No calendar data loaded.</span>`;
-    return;
-  }
-  const today = new Date(), items = [];
-  calMonths.forEach(m => {
-    Object.entries(m.events).forEach(([ds,evts]) => {
-      const diff = Math.round((new Date(m.year,m.month,+ds) - today) / 86400000);
-      if (diff >= 0 && diff <= 7)
-        evts.forEach(e => items.push({diff, day: diff===0?'Today':diff===1?'Tomorrow':`In ${diff}d`, label:e.l, type:e.t}));
+  const today = new Date();
+  const items = [];
+  const seen = new Set();
+
+  // Pull from monthly calendar CSV data
+  if (calMonths.length) {
+    calMonths.forEach(m => {
+      Object.entries(m.events).forEach(([ds, evts]) => {
+        const evtDate = new Date(m.year, m.month, +ds);
+        const diff = Math.round((evtDate - today) / 86400000);
+        if (diff >= 0 && diff <= 7) {
+          evts.forEach(e => {
+            const key = e.l + '|' + diff;
+            if (!seen.has(key)) {
+              seen.add(key);
+              const dayLabel = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : fmtDate(evtDate);
+              items.push({diff, day: dayLabel, label: e.l, type: e.t});
+            }
+          });
+        }
+      });
     });
-  });
+  }
+
+  // Also pull from weekly parsed events (injected by Apps Script)
+  if (parsed && parsed.dates) {
+    parsed.dates.forEach((dateStr, i) => {
+      if (!dateStr) return;
+      const evtDate = new Date(dateStr);
+      if (isNaN(evtDate)) return;
+      const diff = Math.round((evtDate - today) / 86400000);
+      if (diff >= 0 && diff <= 7) {
+        const evts = parsed.events[i] || [];
+        evts.forEach(ev => {
+          const key = ev.name + '|' + diff;
+          if (!seen.has(key)) {
+            seen.add(key);
+            const dayLabel = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : fmtDate(evtDate);
+            items.push({diff, day: dayLabel, label: ev.name, type: 'weekly'});
+          }
+        });
+      }
+    });
+  }
+
   items.sort((a,b) => a.diff - b.diff);
   el.innerHTML = items.length
-    ? items.slice(0,6).map(i => `<div class="banner-item"><div class="banner-dot bd-${i.type}"></div><span class="banner-when">${i.day}</span><span>${esc(i.label)}</span></div>`).join('')
+    ? items.slice(0,8).map(it => `<div class="banner-item"><div class="banner-dot bd-${it.type}"></div><span class="banner-when">${it.day}</span><span>${esc(it.label)}</span></div>`).join('')
     : `<span style="font-size:12px;color:var(--pink-text);">Nothing in the next 7 days.</span>`;
 }
 
@@ -391,6 +425,18 @@ function setView(v){
   if (v==='todo')     renderTodo();
   if (v==='calendar') renderCalendar();
   if (v==='notes')    renderNotes();
+}
+
+function getMonthlyEventsForDate(dateStr) {
+  if (!dateStr || !calMonths.length) return [];
+  const d = new Date(dateStr);
+  if (isNaN(d)) return [];
+  const dayNum = d.getDate();
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  const m = calMonths.find(m => m.month === month && m.year === year);
+  if (!m || !m.events[dayNum]) return [];
+  return m.events[dayNum];
 }
 
 function renderDayNav(){
@@ -408,11 +454,26 @@ function renderDayContent(){
   const i=activeDay, wk=getWK(); let h='';
   if (parsed.focus[i])
     h += `<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
-  if (parsed.events[i] && parsed.events[i].length){
+  // Merge weekly sheet events + monthly calendar events for this date
+  const weeklyEvts = parsed.events[i] || [];
+  const monthlyEvts = getMonthlyEventsForDate(parsed.dates[i]);
+  // Convert monthly events to same shape, avoid duplicates
+  const weeklyNames = weeklyEvts.map(e => e.name.toLowerCase());
+  const extraEvts = monthlyEvts
+    .filter(e => !weeklyNames.some(n => n.includes(e.l.toLowerCase()) || e.l.toLowerCase().includes(n)))
+    .map(e => ({name: e.l, start: '', end: '', type: e.t}));
+  const allEvts = [...weeklyEvts.map(e => ({...e, type: 'weekly'})), ...extraEvts];
+
+  if (allEvts.length){
     h += `<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
-    parsed.events[i].forEach(ev => {
+    allEvts.forEach(ev => {
       const t = ev.start ? `${ev.start}${ev.end?' – '+ev.end:''}` : '';
-      h += `<div class="event-row"><div class="event-dot"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
+      const dotColor = ev.type === 'weekly' ? 'var(--blue)' :
+        ev.type === 'sport' ? 'var(--blue)' :
+        ev.type === 'test'  ? 'var(--yellow)' :
+        ev.type === 'chess' ? 'var(--green)' :
+        ev.type === 'holiday' ? 'var(--orange)' : 'var(--pink)';
+      h += `<div class="event-row"><div class="event-dot" style="background:${dotColor}"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
     });
     h += `</div></div>`;
   }
@@ -434,7 +495,7 @@ function renderDayContent(){
     });
     h += `</div></div>`;
   }
-  if (!parsed.focus[i] && (!parsed.events[i]||!parsed.events[i].length) && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
+  if (!parsed.focus[i] && !allEvts.length && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
     h += `<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
   document.getElementById('day-content').innerHTML = h;
 }
@@ -576,4 +637,3 @@ loadAndRender();
 </script>
 </body>
 </html>
-
