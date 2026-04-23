@@ -233,6 +233,14 @@ function parseCSV(text){
 function cl(v){ return (v||'').replace(/^"|"$/g,'').trim(); }
 function isTRUE(v){ return cl(v).toUpperCase()==='TRUE'; }
 
+function sanitizeTime(s) {
+  if (!s) return '';
+  // If it looks like a full date (e.g. "Dec 31, 1899" or "Jan 1, 1900"), strip it
+  if (/\b(18|19)\d{2}\b/.test(s)) return '';
+  // If it's a valid HH:mm pattern, keep it
+  return s;
+}
+
 function parseWeekly(rows){
   const d={weekStart:'',weekEnd:'',dates:[],focus:[],dinner:[],events:[],tasks:[],habits:[],habitPct:[],cleaning:[],todos:[]};
   const r=rows;
@@ -241,7 +249,7 @@ function parseWeekly(rows){
   DAY_COLS.forEach(c=>d.dinner.push(r[8]?cl(r[8][c]):''));
   DAY_COLS.forEach((c)=>{
     const evts=[];
-    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:cl(r[ri][c+1]),end:cl(r[ri][c+2])});}
+    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:sanitizeTime(cl(r[ri][c+1])),end:sanitizeTime(cl(r[ri][c+2]))});}
     d.events.push(evts);
   });
   const taskRows=[];
