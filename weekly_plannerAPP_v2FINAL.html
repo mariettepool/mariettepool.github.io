@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-height:100vh;}
+.app{max-width:780px;margin:0 auto;padding:1.5rem 1.25rem 3rem;}
+:root{
+  --pink:#D4537E;--pink-bg:#FBEAF0;--pink-text:#72243E;
+  --blue:#185FA5;--blue-bg:#E6F1FB;--blue-text:#0C447C;
+  --orange:#D85A30;--orange-bg:#FAECE7;--orange-text:#712B13;
+  --green:#3B6D11;--green-bg:#EAF3DE;--green-text:#27500A;
+  --yellow:#BA7517;--yellow-bg:#FAEEDA;--yellow-text:#633806;
+  --teal:#0F6E56;--teal-bg:#E1F5EE;--teal-text:#085041;
+  --border:#e0ddd8;--card:#ffffff;--muted:#6b6967;--radius:8px;--radius-lg:12px;
+}
+.top-header{display:flex;align-items:center;justify-content:space-between;padding:0 0 1rem;border-bottom:2px solid var(--pink);margin-bottom:1rem;flex-wrap:wrap;gap:8px;}
+.top-header h1{font-family:'Lora',serif;font-size:26px;font-weight:400;color:var(--pink);}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.week-range{font-size:12px;color:var(--muted);}
+.sync-btn{font-size:11px;padding:5px 12px;border-radius:var(--radius);border:1.5px solid var(--blue);background:transparent;cursor:pointer;color:var(--blue);font-weight:500;}
+.sync-btn:hover{background:var(--blue-bg);}
+.sync-status{font-size:11px;color:var(--muted);}
+.upcoming-banner{background:var(--pink-bg);border:1.5px solid var(--pink);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:1rem;}
+.banner-title{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--pink-text);margin-bottom:8px;}
+.banner-item{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;}
+.banner-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.bd-test{background:var(--yellow);}
+.bd-sport{background:var(--blue);}
+.bd-chess{background:var(--green);}
+.bd-holiday{background:var(--orange);}
+.bd-other{background:var(--teal);}
+.banner-when{font-size:11px;color:var(--muted);min-width:52px;}
+.nav-tabs{display:flex;gap:4px;margin-bottom:1.25rem;flex-wrap:wrap;}
+.ntab{padding:5px 13px;border-radius:20px;border:1.5px solid;font-size:12px;cursor:pointer;background:transparent;font-weight:500;transition:all .15s;}
+.ntab-day{border-color:var(--pink);color:var(--pink);}
+.ntab-day.active,.ntab-day:hover{background:var(--pink);color:#fff;}
+.ntab-dinner{border-color:var(--orange);color:var(--orange);}
+.ntab-dinner.active,.ntab-dinner:hover{background:var(--orange);color:#fff;}
+.ntab-habits{border-color:var(--green);color:var(--green);}
+.ntab-habits.active,.ntab-habits:hover{background:var(--green);color:#fff;}
+.ntab-cleaning{border-color:var(--teal);color:var(--teal);}
+.ntab-cleaning.active,.ntab-cleaning:hover{background:var(--teal);color:#fff;}
+.ntab-todo{border-color:var(--blue);color:var(--blue);}
+.ntab-todo.active,.ntab-todo:hover{background:var(--blue);color:#fff;}
+.ntab-cal{border-color:var(--yellow);color:var(--yellow);}
+.ntab-cal.active,.ntab-cal:hover{background:var(--yellow);color:#fff;}
+.ntab-notes{border-color:#993556;color:#993556;}
+.ntab-notes.active,.ntab-notes:hover{background:#993556;color:#fff;}
+.day-nav{display:flex;gap:6px;margin-bottom:1.25rem;overflow-x:auto;padding-bottom:4px;}
+.day-btn{flex-shrink:0;padding:8px 12px;border-radius:var(--radius);border:1.5px solid var(--border);font-size:12px;cursor:pointer;background:transparent;text-align:center;transition:all .15s;min-width:60px;}
+.day-btn .dname{font-weight:500;display:block;font-size:11px;}
+.day-btn .ddate{font-size:10px;color:var(--muted);}
+.day-btn:hover{border-color:var(--pink);color:var(--pink);}
+.day-btn.active{background:var(--pink);border-color:var(--pink);color:#fff;}
+.day-btn.active .ddate{color:rgba(255,255,255,0.75);}
+.section{margin-bottom:1.25rem;}
+.st{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding:2px 8px;border-radius:10px;display:inline-block;}
+.st-pink{background:var(--pink-bg);color:var(--pink-text);}
+.st-blue{background:var(--blue-bg);color:var(--blue-text);}
+.st-orange{background:var(--orange-bg);color:var(--orange-text);}
+.st-green{background:var(--green-bg);color:var(--green-text);}
+.st-teal{background:var(--teal-bg);color:var(--teal-text);}
+.card-block{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.card-pink{border-color:var(--pink)!important;border-width:1.5px!important;}
+.card-blue{border-color:var(--blue)!important;border-width:1.5px!important;}
+.card-orange{border-color:var(--orange)!important;border-width:1.5px!important;}
+.card-green{border-color:var(--green)!important;border-width:1.5px!important;}
+.card-teal{border-color:var(--teal)!important;border-width:1.5px!important;}
+.focus-text{padding:10px 14px;font-size:14px;font-style:italic;color:var(--pink-text);background:var(--pink-bg);}
+.event-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--border);}
+.event-row:last-child{border-bottom:none;}
+.event-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;}
+.event-name{flex:1;font-size:13px;}
+.event-time{font-size:11px;color:var(--blue);font-weight:500;}
+.dinner-preview{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--orange-bg);}
+.dinner-text{font-size:13px;flex:1;color:var(--orange-text);}
+.task-row,.todo-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .1s;}
+.task-row:last-child,.todo-row:last-child{border-bottom:none;}
+.task-row:hover{background:var(--pink-bg);}
+.todo-row:hover{background:var(--blue-bg);}
+.task-row.done,.todo-row.done{opacity:.45;}
+.task-row.done .tname,.todo-row.done .tname{text-decoration:line-through;}
+.cb{width:17px;height:17px;border-radius:50%;border:2px solid #ccc;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.task-row.done .cb{background:var(--pink);border-color:var(--pink);}
+.todo-row.done .cb{background:var(--blue);border-color:var(--blue);}
+.ck{width:8px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px);display:none;}
+.task-row.done .ck,.todo-row.done .ck{display:block;}
+.tname{font-size:13px;flex:1;}
+.pct-badge{font-size:11px;padding:2px 7px;border-radius:8px;background:var(--yellow-bg);color:var(--yellow-text);font-weight:500;}
+.prog-bar{height:4px;border-radius:2px;margin:6px 0 10px;}
+.prog-fill{height:100%;border-radius:2px;transition:width .3s;}
+.prog-label{font-size:11px;color:var(--muted);}
+.habit-row,.clean-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:0.5px solid var(--border);}
+.habit-row:last-child,.clean-row:last-child{border-bottom:none;}
+.habit-name,.clean-name{flex:1;font-size:13px;}
+.dots{display:flex;gap:5px;}
+.dot{width:13px;height:13px;border-radius:50%;}
+.dot-on-green{background:var(--green);border:1.5px solid var(--green);}
+.dot-off-green{background:var(--green-bg);border:1.5px solid #ccc;}
+.dot-on-teal{background:var(--teal);border:1.5px solid var(--teal);}
+.dot-off-teal{background:var(--teal-bg);border:1.5px solid #ccc;}
+.dinner-plan-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--border);}
+.dinner-plan-row:last-child{border-bottom:none;}
+.dp-day{font-size:12px;font-weight:500;min-width:36px;color:var(--orange);}
+.dp-day.today{background:var(--orange);color:#fff;padding:2px 6px;border-radius:6px;text-align:center;}
+.dp-input{flex:1;background:transparent;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:#1a1a1a;outline:none;}
+.dp-input::placeholder{color:var(--muted);opacity:.6;}
+.dp-saved{font-size:10px;color:var(--green);opacity:0;transition:opacity .3s;font-weight:500;}
+.dp-saved.show{opacity:1;}
+.month-nav{display:flex;align-items:center;gap:10px;margin-bottom:1rem;}
+.month-nav-btn{padding:5px 14px;border-radius:var(--radius);border:1.5px solid var(--yellow);background:transparent;cursor:pointer;font-size:12px;color:var(--yellow-text);font-weight:500;}
+.month-nav-btn:hover{background:var(--yellow-bg);}
+.month-title{font-family:'Lora',serif;font-size:18px;font-weight:400;flex:1;color:var(--yellow-text);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;}
+.cal-head{font-size:10px;font-weight:500;text-align:center;padding:4px 2px;color:var(--muted);}
+.cal-cell{border:0.5px solid var(--border);border-radius:6px;padding:5px 6px;min-height:72px;background:var(--card);overflow:hidden;}
+.cal-cell.empty{background:transparent;border-color:transparent;}
+.cal-cell.today-cell{border:2px solid var(--blue);background:var(--blue-bg);}
+.cal-num{font-size:11px;font-weight:500;margin-bottom:3px;}
+.cal-cell.today-cell .cal-num{color:var(--blue);}
+.cal-evt{font-size:9px;line-height:1.3;margin-bottom:2px;padding:1px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;}
+.cal-evt.sport{background:var(--blue-bg);color:var(--blue-text);}
+.cal-evt.test{background:var(--yellow-bg);color:var(--yellow-text);}
+.cal-evt.chess{background:var(--green-bg);color:var(--green-text);}
+.cal-evt.holiday{background:var(--orange-bg);color:var(--orange-text);}
+.cal-evt.other{background:var(--pink-bg);color:var(--pink-text);}
+.notes-area{width:100%;min-height:160px;font-family:'DM Sans',sans-serif;font-size:13px;padding:12px 14px;border:1.5px solid var(--pink);border-radius:var(--radius);background:var(--pink-bg);color:#1a1a1a;resize:vertical;line-height:1.6;}
+.notes-area:focus{outline:none;border-color:var(--pink-text);}
+.notes-saved{font-size:11px;color:var(--green);margin-top:6px;height:14px;font-weight:500;}
+.loading{text-align:center;padding:2rem;color:var(--muted);font-size:13px;}
+.error-box{background:#FCEBEB;border:1.5px solid #F09595;border-radius:var(--radius);padding:12px 14px;font-size:13px;color:#791F1F;margin-bottom:1rem;line-height:1.6;}
+.info-box{background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--blue-text);margin-bottom:1rem;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top-header">
+    <h1>Weekly Planner</h1>
+    <div class="header-right">
+      <span class="week-range" id="week-range">Loading...</span>
+      <button class="sync-btn" onclick="loadAndRender()">↻ Sync</button>
+      <span class="sync-status" id="sync-status"></span>
+    </div>
+  </div>
+  <div id="host-warning" class="info-box" style="display:none;">
+    ⚠️ <strong>Running as a local file.</strong> Data may not load correctly. 
+    For best results, <strong>host this file online for free</strong> — see the instructions in the download package.
+  </div>
+  <div class="upcoming-banner">
+    <div class="banner-title">Coming up in the next 7 days</div>
+    <div id="banner-items"><span style="font-size:12px;color:var(--pink-text);">Loading...</span></div>
+  </div>
+  <div class="nav-tabs">
+    <button class="ntab ntab-day active" onclick="setView('day')">Day view</button>
+    <button class="ntab ntab-dinner" onclick="setView('dinner')">Dinner</button>
+    <button class="ntab ntab-habits" onclick="setView('habits')">Habits</button>
+    <button class="ntab ntab-cleaning" onclick="setView('cleaning')">Cleaning</button>
+    <button class="ntab ntab-todo" onclick="setView('todo')">To-do</button>
+    <button class="ntab ntab-cal" onclick="setView('calendar')">Calendar</button>
+    <button class="ntab ntab-notes" onclick="setView('notes')">Notes</button>
+  </div>
+  <div id="error-box" class="error-box" style="display:none;"></div>
+  <div id="view-day">
+    <div class="day-nav" id="day-nav"></div>
+    <div id="day-content"><div class="loading">Syncing with Google Sheets...</div></div>
+  </div>
+  <div id="view-dinner" style="display:none"></div>
+  <div id="view-habits" style="display:none"></div>
+  <div id="view-cleaning" style="display:none"></div>
+  <div id="view-todo" style="display:none"></div>
+  <div id="view-calendar" style="display:none"></div>
+  <div id="view-notes" style="display:none"></div>
+</div>
+
+<script>
+// ── Detect local file and show warning ──
+if (location.protocol === 'file:') {
+  document.getElementById('host-warning').style.display = 'block';
+}
+
+// ── Apps Script relay URL (no CORS issues, no publishing needed) ──
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFyP9N0xbaeeORsbkSnZxQU9vr-nMG1Ve90qP7gZkbl9dxMyAMiiJhIyfQzg1Kq2cZ/exec';
+const GID_WEEKLY  = '1269236167';
+const GID_MONTHLY = '1909847739';
+
+async function fetchCSV(gid) {
+  const url = `${APPS_SCRIPT_URL}?gid=${gid}&t=${Date.now()}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Server returned ${r.status}`);
+  const t = await r.text();
+  if (!t || t.length < 50 || t.includes('<html')) throw new Error('Invalid data received');
+  return t;
+}
+
+const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const SHORT     = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DAY_COLS  = [15,18,21,24,27,30,33];
+const HABIT_COLS= [8,9,10,11,12,13,14];
+
+let parsed = null, calMonths = [], activeDay = 0, currentView = 'day', calIdx = 0;
+let taskDone = {}, todoState = {}, dinnerEdits = {};
+
+function loadSaved(){
+  try {
+    const s = JSON.parse(localStorage.getItem('wplive3') || '{}');
+    taskDone = s.td || {}; todoState = s.ts || {}; dinnerEdits = s.de || {};
+  } catch(e) {}
+}
+function saveState(){
+  try { localStorage.setItem('wplive3', JSON.stringify({td:taskDone, ts:todoState, de:dinnerEdits})); } catch(e) {}
+}
+function getWK(){ return parsed ? parsed.weekStart : 'def'; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(s){
+  if(!s)return'';
+  const d = s instanceof Date ? s : new Date(s);
+  if(isNaN(d))return String(s);
+  return d.getDate()+' '+d.toLocaleString('en-ZA',{month:'long'});
+}
+
+function parseCSV(text){
+  const rows=[];let inQ=false,cell='',row=[];
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){row.push(cell.trim());cell='';}
+    else if((c==='\n'||c==='\r')&&!inQ){
+      if(c==='\r'&&text[i+1]==='\n')i++;
+      row.push(cell.trim());rows.push(row);row=[];cell='';
+    }else cell+=c;
+  }
+  if(cell||row.length){row.push(cell.trim());rows.push(row);}
+  return rows;
+}
+function cl(v){ return (v||'').replace(/^"|"$/g,'').trim(); }
+function isTRUE(v){ return cl(v).toUpperCase()==='TRUE'; }
+
+function parseWeekly(rows){
+  const d={weekStart:'',weekEnd:'',dates:[],focus:[],dinner:[],events:[],tasks:[],habits:[],habitPct:[],cleaning:[],todos:[]};
+  const r=rows;
+  if(r[3]){d.weekStart=cl(r[3][1]);d.weekEnd=cl(r[3][9]);DAY_COLS.forEach(c=>d.dates.push(cl(r[3][c])));}
+  DAY_COLS.forEach((c)=>{const f=[r[5]?cl(r[5][c]):'',r[6]?cl(r[6][c]):''].filter(Boolean).join(' · ');d.focus.push(f);});
+  DAY_COLS.forEach(c=>d.dinner.push(r[8]?cl(r[8][c]):''));
+  DAY_COLS.forEach((c)=>{
+    const evts=[];
+    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:cl(r[ri][c+1]),end:cl(r[ri][c+2])});}
+    d.events.push(evts);
+  });
+  const taskRows=[];
+  for(let ri=15;ri<=27;ri++){
+    if(!r[ri])continue;const name0=cl(r[ri][DAY_COLS[0]]);if(!name0)continue;
+    taskRows.push(DAY_COLS.map(c=>({name:cl(r[ri][c]),done:isTRUE(r[ri][c+2])})));
+  }
+  DAY_COLS.forEach((_,i)=>d.tasks.push(taskRows.map(row=>row[i]).filter(t=>t&&t.name)));
+  for(let ri=17;ri<=27;ri++){
+    if(!r[ri])continue;const name=cl(r[ri][0]);
+    if(!name||name.toLowerCase().startsWith('habits'))continue;
+    d.habits.push({name,days:HABIT_COLS.map(c=>isTRUE(r[ri][c])?1:0)});
+  }
+  if(r[27])d.habitPct=HABIT_COLS.map(c=>parseInt(cl(r[27][c]))||0);
+  for(let ri=37;ri<=47;ri++){if(!r[ri])continue;const name=cl(r[ri][0]);if(!name)continue;d.cleaning.push({name,days:HABIT_COLS.map(c=>isTRUE(r[ri][c])?1:0)});}
+  for(let ri=30;ri<=35;ri++){
+    if(!r[ri])continue;
+    const n1=cl(r[ri][0]),d1=isTRUE(r[ri][5]),n2=cl(r[ri][8]),d2=isTRUE(r[ri][13]);
+    if(n1)d.todos.push({name:n1,done:d1});if(n2)d.todos.push({name:n2,done:d2});
+  }
+  return d;
+}
+
+function classifyEvent(name){
+  const n=name.toLowerCase();
+  if(/skaak|chess/.test(n))return'chess';
+  if(/rugby|atletiek|landloop/.test(n))return'sport';
+  if(/toets|klastoets|kwartaal|spelling|ondersoek|kontrole|voordra|inhandig|prepared speech|transaksionele|advertensie|prakties|hoofrekene|gedig|storieboek/.test(n))return'test';
+  if(/vakansie|vryheids|jeugdag|werkersdag|sluit/.test(n))return'holiday';
+  return'other';
+}
+
+function parseMonthly(rows){
+  const months=[];let cur=null;
+  const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DC=[0,2,4,6,8,10,12];
+  for(let ri=0;ri<rows.length;ri++){
+    const row=rows[ri],c0=cl(row[0]);
+    const mM=MN.find(m=>c0.startsWith(m));
+    if(mM){
+      const ym=c0.match(/\d{4}/),year=ym?parseInt(ym[0]):new Date().getFullYear(),mi=MN.indexOf(mM);
+      cur={name:c0,year,month:mi,events:{},days:new Date(year,mi+1,0).getDate(),firstDayOfWeek:0,todayDay:null};
+      months.push(cur);ri+=2;continue;
+    }
+    if(!cur)continue;
+    const dn=parseInt(c0);
+    if(!isNaN(dn)&&dn>=1&&dn<=31){
+      const wdays=DC.map(c=>{const v=cl(row[c]);return parseInt(v)||null;});
+      wdays.forEach((d,i)=>{if(d===1)cur.firstDayOfWeek=i;});
+      const today=new Date();
+      wdays.forEach(d=>{if(d&&new Date(cur.year,cur.month,d).toDateString()===today.toDateString())cur.todayDay=d;});
+      for(let er=ri+1;er<Math.min(ri+7,rows.length);er++){
+        const erow=rows[er],e0=cl(erow[0]);
+        if(!isNaN(parseInt(e0))&&parseInt(e0)>=1)break;
+        if(MN.find(m=>e0.startsWith(m)))break;
+        DC.forEach((c,di)=>{
+          const evtName=cl(erow[c]);
+          if(!evtName||evtName==='FALSE'||evtName==='TRUE')return;
+          const d=wdays[di];if(!d)return;
+          if(!cur.events[d])cur.events[d]=[];
+          cur.events[d].push({t:classifyEvent(evtName),l:evtName});
+        });
+      }
+    }
+  }
+  return months;
+}
+
+async function loadAndRender(){
+  const statusEl = document.getElementById('sync-status');
+  const errEl    = document.getElementById('error-box');
+  statusEl.textContent = 'Syncing...';
+  errEl.style.display  = 'none';
+  let weeklyOk = false;
+
+  try {
+    const text = await fetchCSV(GID_WEEKLY);
+    parsed = parseWeekly(parseCSV(text));
+    weeklyOk = true;
+  } catch(e) {
+    errEl.style.display = 'block';
+    errEl.innerHTML = `<strong>Could not load weekly data.</strong><br>${e.message}<br><br>
+    <strong>Most likely cause:</strong> The app is running as a local file. 
+    Please host it online (see instructions) or open it through a local server.`;
+  }
+
+  try {
+    const text2 = await fetchCSV(GID_MONTHLY);
+    if (text2.length > 50) calMonths = parseMonthly(parseCSV(text2));
+  } catch(e) {}
+
+  statusEl.textContent = weeklyOk ? '✓ Synced' : '⚠ Offline';
+  setTimeout(() => { statusEl.textContent = ''; }, 4000);
+
+  if (weeklyOk) {
+    document.getElementById('week-range').textContent =
+      (parsed.weekStart && parsed.weekEnd) ? fmtDate(parsed.weekStart) + ' – ' + fmtDate(parsed.weekEnd) : '';
+    const today = new Date();
+    activeDay = 0;
+    parsed.dates.forEach((d,i) => {
+      // Try multiple date formats
+      const dt = new Date(d);
+      if (!isNaN(dt) && dt.toDateString() === today.toDateString()) activeDay = i;
+    });
+    renderBanner();
+    renderDayNav();
+    renderDayContent();
+    if (currentView !== 'day') setView(currentView);
+  }
+}
+
+function renderBanner(){
+  const el = document.getElementById('banner-items');
+  if (!calMonths.length) {
+    el.innerHTML = `<span style="font-size:12px;color:var(--pink-text);">No calendar data loaded.</span>`;
+    return;
+  }
+  const today = new Date(), items = [];
+  calMonths.forEach(m => {
+    Object.entries(m.events).forEach(([ds,evts]) => {
+      const diff = Math.round((new Date(m.year,m.month,+ds) - today) / 86400000);
+      if (diff >= 0 && diff <= 7)
+        evts.forEach(e => items.push({diff, day: diff===0?'Today':diff===1?'Tomorrow': fmtDate(new Date(m.year,m.month,+ds)), label:e.l, type:e.t}));
+    });
+  });
+  items.sort((a,b) => a.diff - b.diff);
+  el.innerHTML = items.length
+    ? items.slice(0,6).map(i => `<div class="banner-item"><div class="banner-dot bd-${i.type}"></div><span class="banner-when">${i.day}</span><span>${esc(i.label)}</span></div>`).join('')
+    : `<span style="font-size:12px;color:var(--pink-text);">Nothing in the next 7 days.</span>`;
+}
+
+const VIEWS = ['day','dinner','habits','cleaning','todo','calendar','notes'];
+function setView(v){
+  currentView = v;
+  VIEWS.forEach(x => document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none');
+  document.querySelectorAll('.ntab').forEach((b,i) => b.classList.toggle('active', VIEWS[i]===v));
+  if (v==='dinner')   renderDinner();
+  if (v==='habits')   renderHabits();
+  if (v==='cleaning') renderCleaning();
+  if (v==='todo')     renderTodo();
+  if (v==='calendar') renderCalendar();
+  if (v==='notes')    renderNotes();
+}
+
+function renderDayNav(){
+  if (!parsed) return;
+  document.getElementById('day-nav').innerHTML = DAY_NAMES.map((d,i) => `
+    <button class="day-btn${i===activeDay?' active':''}" onclick="setDay(${i})">
+      <span class="dname">${SHORT[i]}</span>
+      <span class="ddate">${fmtDate(parsed.dates[i]||'')}</span>
+    </button>`).join('');
+}
+function setDay(i){ activeDay=i; renderDayNav(); renderDayContent(); }
+
+function renderDayContent(){
+  if (!parsed) { document.getElementById('day-content').innerHTML='<div class="loading">Loading...</div>'; return; }
+  const i=activeDay, wk=getWK(); let h='';
+  if (parsed.focus[i])
+    h += `<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
+  if (parsed.events[i] && parsed.events[i].length){
+    h += `<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
+    parsed.events[i].forEach(ev => {
+      const t = ev.start ? `${ev.start}${ev.end?' – '+ev.end:''}` : '';
+      h += `<div class="event-row"><div class="event-dot"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
+    });
+    h += `</div></div>`;
+  }
+  const dinVal = (dinnerEdits[wk]&&dinnerEdits[wk][i]!=null) ? dinnerEdits[wk][i] : parsed.dinner[i];
+  if (dinVal)
+    h += `<div class="section"><div class="st st-orange">Dinner</div><div class="card-block card-orange"><div class="dinner-preview"><span style="font-size:14px;">🍽</span><span class="dinner-text">${esc(dinVal)}</span></div></div></div>`;
+  if (parsed.tasks[i] && parsed.tasks[i].length){
+    const td = (taskDone[wk]&&taskDone[wk][i]) || {};
+    const total = parsed.tasks[i].length;
+    const done  = parsed.tasks[i].filter((t,j) => td[j]!=null ? td[j] : t.done).length;
+    const pct   = Math.round(done/total*100);
+    h += `<div class="section"><div class="st st-pink">Tasks</div>
+    <div class="prog-label">${done} of ${total} done</div>
+    <div class="prog-bar" style="background:var(--pink-bg);"><div class="prog-fill" style="width:${pct}%;background:var(--pink);"></div></div>
+    <div class="card-block card-pink">`;
+    parsed.tasks[i].forEach((t,j) => {
+      const isDone = td[j]!=null ? td[j] : t.done;
+      h += `<div class="task-row${isDone?' done':''}" onclick="toggleTask(${i},${j})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
+    });
+    h += `</div></div>`;
+  }
+  if (!parsed.focus[i] && (!parsed.events[i]||!parsed.events[i].length) && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
+    h += `<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
+  document.getElementById('day-content').innerHTML = h;
+}
+function toggleTask(d,t){
+  const wk=getWK();
+  if(!taskDone[wk])taskDone[wk]={};
+  if(!taskDone[wk][d])taskDone[wk][d]={};
+  const cur = taskDone[wk][d][t]!=null ? taskDone[wk][d][t] : (parsed.tasks[d][t]&&parsed.tasks[d][t].done);
+  taskDone[wk][d][t]=!cur; saveState(); renderDayContent();
+}
+
+function renderDinner(){
+  if (!parsed) { document.getElementById('view-dinner').innerHTML='<div class="loading">Loading...</div>'; return; }
+  const wk=getWK();
+  let h=`<div class="section"><div class="st st-orange">This week's dinners</div><div class="card-block card-orange">`;
+  DAY_NAMES.forEach((day,i) => {
+    const val = (dinnerEdits[wk]&&dinnerEdits[wk][i]!=null) ? dinnerEdits[wk][i] : parsed.dinner[i];
+    const isT = i===activeDay;
+    h += `<div class="dinner-plan-row"><span class="dp-day${isT?' today':''}">${SHORT[i]}</span>
+    <input class="dp-input" id="dp-${i}" type="text" placeholder="What's for dinner?" value="${esc(val||'')}" oninput="saveDinner(${i},this.value)">
+    <span class="dp-saved" id="dps-${i}">✓</span></div>`;
+  });
+  h += `</div></div><p style="font-size:11px;color:var(--muted);">Edits save locally. Hit ↻ Sync to reload from sheet.</p>`;
+  document.getElementById('view-dinner').innerHTML = h;
+}
+function saveDinner(i,val){
+  const wk=getWK();
+  if(!dinnerEdits[wk])dinnerEdits[wk]={};
+  dinnerEdits[wk][i]=val; saveState();
+  const s=document.getElementById('dps-'+i);
+  if(s){s.classList.add('show');setTimeout(()=>s.classList.remove('show'),1500);}
+}
+
+function renderHabits(){
+  if (!parsed||!parsed.habits.length) { document.getElementById('view-habits').innerHTML='<div class="loading">No habit data.</div>'; return; }
+  let h=`<div class="section"><div class="st st-green">Weekly habits</div><div class="card-block card-green">`;
+  parsed.habits.forEach(hb => {
+    h += `<div class="habit-row"><span class="habit-name">${esc(hb.name)}</span><div class="dots">`;
+    hb.days.forEach((d,i) => h += `<div class="dot ${d?'dot-on-green':'dot-off-green'}" title="${SHORT[i]}"></div>`);
+    h += `</div></div>`;
+  });
+  h += `</div></div>`;
+  if (parsed.habitPct&&parsed.habitPct.length){
+    h += `<div class="section"><div class="st st-green">Daily completion</div><div class="card-block card-green">`;
+    DAY_NAMES.forEach((d,i) => h += `<div class="habit-row"><span class="habit-name">${d}</span><span class="pct-badge">${parsed.habitPct[i]||0}%</span></div>`);
+    h += `</div></div>`;
+  }
+  document.getElementById('view-habits').innerHTML = h;
+}
+
+function renderCleaning(){
+  if (!parsed||!parsed.cleaning.length) { document.getElementById('view-cleaning').innerHTML='<div class="loading">No cleaning data.</div>'; return; }
+  let h=`<div class="section"><div class="st st-teal">Cleaning schedule</div>
+  <div style="display:flex;gap:5px;margin-bottom:8px;">
+    ${SHORT.map(s=>`<span style="font-size:10px;color:var(--teal-text);font-weight:500;min-width:13px;text-align:center;">${s[0]}</span>`).join('')}
+  </div><div class="card-block card-teal">`;
+  parsed.cleaning.forEach(c => {
+    h += `<div class="clean-row"><span class="clean-name">${esc(c.name)}</span><div class="dots">`;
+    c.days.forEach(d => h += `<div class="dot ${d?'dot-on-teal':'dot-off-teal'}"></div>`);
+    h += `</div></div>`;
+  });
+  h += `</div></div>`;
+  document.getElementById('view-cleaning').innerHTML = h;
+}
+
+function renderTodo(){
+  if (!parsed||!parsed.todos.length) { document.getElementById('view-todo').innerHTML='<div class="loading">No to-do data.</div>'; return; }
+  const wk=getWK(), ts=todoState[wk]||{};
+  const done=parsed.todos.filter((t,i)=>ts[i]!=null?ts[i]:t.done).length;
+  const total=parsed.todos.length, pct=Math.round(done/total*100);
+  let h=`<div class="section">
+    <div class="prog-label">${done} of ${total} complete (${pct}%)</div>
+    <div class="prog-bar" style="background:var(--blue-bg);"><div class="prog-fill" style="width:${pct}%;background:var(--blue);"></div></div>
+    <div class="card-block card-blue" style="margin-top:8px;">`;
+  parsed.todos.forEach((t,i) => {
+    const isDone=ts[i]!=null?ts[i]:t.done;
+    h += `<div class="todo-row${isDone?' done':''}" onclick="toggleTodo(${i})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
+  });
+  h += `</div></div>`;
+  document.getElementById('view-todo').innerHTML = h;
+}
+function toggleTodo(i){
+  const wk=getWK();
+  if(!todoState[wk])todoState[wk]={};
+  const cur=todoState[wk][i]!=null?todoState[wk][i]:parsed.todos[i].done;
+  todoState[wk][i]=!cur; saveState(); renderTodo();
+}
+
+function renderCalendar(){
+  const el=document.getElementById('view-calendar');
+  if (!calMonths.length) { el.innerHTML='<div class="loading">No calendar data. Make sure the monthly tab is published as CSV and hit ↻ Sync.</div>'; return; }
+  const m=calMonths[Math.min(calIdx,calMonths.length-1)];
+  let h=`<div class="month-nav">
+    <button class="month-nav-btn" onclick="prevMonth()">← Prev</button>
+    <span class="month-title">${m.name}</span>
+    <button class="month-nav-btn" onclick="nextMonth()">Next →</button>
+  </div>
+  <div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">
+    <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--blue-bg);color:var(--blue-text);font-weight:500;">Sport</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--yellow-bg);color:var(--yellow-text);font-weight:500;">Toets</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--green-bg);color:var(--green-text);font-weight:500;">Skaak</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--orange-bg);color:var(--orange-text);font-weight:500;">Vakansie</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--pink-bg);color:var(--pink-text);font-weight:500;">Ander</span>
+  </div>
+  <div class="cal-grid">`;
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>h+=`<div class="cal-head">${d}</div>`);
+  for(let i=0;i<m.firstDayOfWeek;i++)h+=`<div class="cal-cell empty"></div>`;
+  for(let d=1;d<=m.days;d++){
+    const isT=d===m.todayDay, evts=m.events[d]||[];
+    h+=`<div class="cal-cell${isT?' today-cell':''}"><div class="cal-num">${d}</div>`;
+    evts.slice(0,3).forEach(e=>h+=`<div class="cal-evt ${e.t}">${esc(e.l)}</div>`);
+    if(evts.length>3)h+=`<div class="cal-evt other">+${evts.length-3} meer</div>`;
+    h+=`</div>`;
+  }
+  const rem=(m.firstDayOfWeek+m.days)%7;
+  if(rem)for(let i=0;i<7-rem;i++)h+=`<div class="cal-cell empty"></div>`;
+  h+=`</div>`;
+  el.innerHTML=h;
+}
+function prevMonth(){ if(calIdx>0){calIdx--;renderCalendar();} }
+function nextMonth(){ if(calIdx<calMonths.length-1){calIdx++;renderCalendar();} }
+
+function renderNotes(){
+  let n=''; try{n=localStorage.getItem('wp_notes3')||'';}catch(e){}
+  document.getElementById('view-notes').innerHTML=`
+    <div class="section"><div class="st st-pink">Weekly notes</div>
+      <textarea class="notes-area" id="notes-ta" placeholder="Jot down anything for this week...">${esc(n)}</textarea>
+      <div class="notes-saved" id="notes-saved"></div>
+    </div>`;
+  document.getElementById('notes-ta').addEventListener('input',function(){
+    try{localStorage.setItem('wp_notes3',this.value);}catch(e){}
+    const s=document.getElementById('notes-saved');
+    s.textContent='✓ Saved'; setTimeout(()=>{s.textContent='';},2000);
+  });
+}
+
+loadSaved();
+loadAndRender();
+</script>
+</body>
+</html>
