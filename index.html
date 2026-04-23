@@ -237,8 +237,24 @@ function sanitizeTime(s) {
   if (!s) return '';
   // If it looks like a full date (e.g. "Dec 31, 1899" or "Jan 1, 1900"), strip it
   if (/\b(18|19)\d{2}\b/.test(s)) return '';
-  // If it's a valid HH:mm pattern, keep it
+  // Already a clean HH:mm
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
   return s;
+}
+
+function fixTime(s) {
+  if (!s) return '';
+  // Google Sheets time bug: "02:00" when it should be "16:00" = UTC vs UTC+2
+  // The raw Date object from Sheets for a time lands on Dec 30/31 1899
+  // When serialised via Apps Script without timezone it comes out as UTC
+  // SA is UTC+2, so we add 2 hours to fix it
+  if (/^\d{1,2}:\d{2}$/.test(s)) {
+    const parts = s.split(':');
+    let h = parseInt(parts[0]) + 2;
+    if (h >= 24) h -= 24;
+    return String(h).padStart(2, '0') + ':' + parts[1];
+  }
+  return sanitizeTime(s);
 }
 
 function parseWeekly(rows){
@@ -249,7 +265,7 @@ function parseWeekly(rows){
   DAY_COLS.forEach(c=>d.dinner.push(r[8]?cl(r[8][c]):''));
   DAY_COLS.forEach((c)=>{
     const evts=[];
-    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:sanitizeTime(cl(r[ri][c+1])),end:sanitizeTime(cl(r[ri][c+2]))});}
+    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:fixTime(cl(r[ri][c+1])),end:fixTime(cl(r[ri][c+2]))});}
     d.events.push(evts);
   });
   const taskRows=[];
