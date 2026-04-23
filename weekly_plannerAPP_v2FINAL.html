@@ -393,7 +393,17 @@ function setView(v){
   if (v==='notes')    renderNotes();
 }
 
-function renderDayNav(){
+function getMonthlyEventsForDate(dateStr) {
+  if (!dateStr || !calMonths.length) return [];
+  const d = new Date(dateStr);
+  if (isNaN(d)) return [];
+  const dayNum = d.getDate();
+  const month = d.getMonth();
+  const year = d.getFullYear();
+  const m = calMonths.find(m => m.month === month && m.year === year);
+  if (!m || !m.events[dayNum]) return [];
+  return m.events[dayNum];
+}
   if (!parsed) return;
   document.getElementById('day-nav').innerHTML = DAY_NAMES.map((d,i) => `
     <button class="day-btn${i===activeDay?' active':''}" onclick="setDay(${i})">
@@ -408,11 +418,26 @@ function renderDayContent(){
   const i=activeDay, wk=getWK(); let h='';
   if (parsed.focus[i])
     h += `<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
-  if (parsed.events[i] && parsed.events[i].length){
+  // Merge weekly sheet events + monthly calendar events for this date
+  const weeklyEvts = parsed.events[i] || [];
+  const monthlyEvts = getMonthlyEventsForDate(parsed.dates[i]);
+  // Convert monthly events to same shape, avoid duplicates
+  const weeklyNames = weeklyEvts.map(e => e.name.toLowerCase());
+  const extraEvts = monthlyEvts
+    .filter(e => !weeklyNames.some(n => n.includes(e.l.toLowerCase()) || e.l.toLowerCase().includes(n)))
+    .map(e => ({name: e.l, start: '', end: '', type: e.t}));
+  const allEvts = [...weeklyEvts.map(e => ({...e, type: 'weekly'})), ...extraEvts];
+
+  if (allEvts.length){
     h += `<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
-    parsed.events[i].forEach(ev => {
+    allEvts.forEach(ev => {
       const t = ev.start ? `${ev.start}${ev.end?' – '+ev.end:''}` : '';
-      h += `<div class="event-row"><div class="event-dot"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
+      const dotColor = ev.type === 'weekly' ? 'var(--blue)' :
+        ev.type === 'sport' ? 'var(--blue)' :
+        ev.type === 'test'  ? 'var(--yellow)' :
+        ev.type === 'chess' ? 'var(--green)' :
+        ev.type === 'holiday' ? 'var(--orange)' : 'var(--pink)';
+      h += `<div class="event-row"><div class="event-dot" style="background:${dotColor}"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
     });
     h += `</div></div>`;
   }
@@ -434,7 +459,7 @@ function renderDayContent(){
     });
     h += `</div></div>`;
   }
-  if (!parsed.focus[i] && (!parsed.events[i]||!parsed.events[i].length) && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
+  if (!parsed.focus[i] && !allEvts.length && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
     h += `<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
   document.getElementById('day-content').innerHTML = h;
 }
