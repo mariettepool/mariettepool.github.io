@@ -183,34 +183,18 @@ if (location.protocol === 'file:') {
   document.getElementById('host-warning').style.display = 'block';
 }
 
-// ── Sheet published CSV URLs ──
-// These use the published CSV URLs directly (you already published these correctly)
-const CSV_WEEKLY  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTLRzWu_zQueOdPf6yhgM1-2XVJ_DgPaR3RR8e0sbJYssSMVoSxltIqYkyu0jMNymsAT_SJAuEaI_oR/pub?gid=1269236167&single=true&output=csv';
-const CSV_MONTHLY = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTLRzWu_zQueOdPf6yhgM1-2XVJ_DgPaR3RR8e0sbJYssSMVoSxltIqYkyu0jMNymsAT_SJAuEaI_oR/pub?gid=1909847739&single=true&output=csv';
+// ── Apps Script relay URL (no CORS issues, no publishing needed) ──
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFyP9N0xbaeeORsbkSnZxQU9vr-nMG1Ve90qP7gZkbl9dxMyAMiiJhIyfQzg1Kq2cZ/exec';
+const GID_WEEKLY  = '1269236167';
+const GID_MONTHLY = '1909847739';
 
-// ── Robust fetch: tries 4 methods in order ──
-async function fetchCSV(csvUrl) {
-  const proxies = [
-    // 1. Direct (works when hosted online)
-    () => fetch(csvUrl + '&t=' + Date.now(), { cache: 'no-store' }),
-    // 2. allorigins - most reliable free proxy
-    () => fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(csvUrl)}`),
-    // 3. corsproxy.io
-    () => fetch(`https://corsproxy.io/?${encodeURIComponent(csvUrl)}`),
-    // 4. thingproxy
-    () => fetch(`https://thingproxy.freeboard.io/fetch/${csvUrl}`),
-  ];
-
-  for (const attempt of proxies) {
-    try {
-      const r = await attempt();
-      if (r.ok) {
-        const t = await r.text();
-        if (t && t.length > 50 && !t.includes('<html')) return t;
-      }
-    } catch (e) { /* try next */ }
-  }
-  throw new Error('All fetch methods failed. Check internet connection and that the sheet is published as CSV.');
+async function fetchCSV(gid) {
+  const url = `${APPS_SCRIPT_URL}?gid=${gid}&t=${Date.now()}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Server returned ${r.status}`);
+  const t = await r.text();
+  if (!t || t.length < 50 || t.includes('<html')) throw new Error('Invalid data received');
+  return t;
 }
 
 const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -232,6 +216,12 @@ function saveState(){
 }
 function getWK(){ return parsed ? parsed.weekStart : 'def'; }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(s){
+  if(!s)return'';
+  const d=new Date(s);
+  if(isNaN(d))return s;
+  return d.getDate()+' '+d.toLocaleString('en-ZA',{month:'long'});
+}
 
 function parseCSV(text){
   const rows=[];let inQ=false,cell='',row=[];
@@ -335,7 +325,7 @@ async function loadAndRender(){
   let weeklyOk = false;
 
   try {
-    const text = await fetchCSV(CSV_WEEKLY);
+    const text = await fetchCSV(GID_WEEKLY);
     parsed = parseWeekly(parseCSV(text));
     weeklyOk = true;
   } catch(e) {
@@ -346,7 +336,7 @@ async function loadAndRender(){
   }
 
   try {
-    const text2 = await fetchCSV(CSV_MONTHLY);
+    const text2 = await fetchCSV(GID_MONTHLY);
     if (text2.length > 50) calMonths = parseMonthly(parseCSV(text2));
   } catch(e) {}
 
@@ -408,7 +398,7 @@ function renderDayNav(){
   document.getElementById('day-nav').innerHTML = DAY_NAMES.map((d,i) => `
     <button class="day-btn${i===activeDay?' active':''}" onclick="setDay(${i})">
       <span class="dname">${SHORT[i]}</span>
-      <span class="ddate">${esc(parsed.dates[i]||'')}</span>
+      <span class="ddate">${fmtDate(parsed.dates[i]||'')}</span>
     </button>`).join('');
 }
 function setDay(i){ activeDay=i; renderDayNav(); renderDayContent(); }
@@ -586,3 +576,4 @@ loadAndRender();
 </script>
 </body>
 </html>
+
