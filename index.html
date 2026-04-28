@@ -133,7 +133,8 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 .notes-area:focus{outline:none;border-color:var(--pink-text);}
 .notes-saved{font-size:11px;color:var(--green);margin-top:6px;height:14px;font-weight:500;}
 .loading{text-align:center;padding:2rem;color:var(--muted);font-size:13px;}
-.error-box{background:#FCEBEB;border:1.5px solid #F09595;border-radius:var(--radius);padding:12px 14px;font-size:13px;color:#791F1F;margin-bottom:1rem;line-height:1.6;}
+.error-box{background:#FCEBEB;border:1.5px solid #F09595;border-radius:var(--radius);padding:12px 14px;font-size:13px;color:#791F1F;margin-bottom:1rem;line-height:1.8;}
+.debug-box{background:var(--blue-bg);border:1px solid var(--blue);border-radius:var(--radius);padding:10px 14px;font-size:11px;color:var(--blue-text);margin-bottom:1rem;font-family:monospace;white-space:pre-wrap;display:none;}
 </style>
 </head>
 <body>
@@ -146,7 +147,6 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
       <span class="sync-status" id="sync-status"></span>
     </div>
   </div>
-
   <div class="upcoming-banner">
     <div class="banner-title">Coming up in the next 7 days</div>
     <div id="banner-items"><span style="font-size:12px;color:var(--pink-text);">Loading...</span></div>
@@ -161,10 +161,8 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
     <button class="ntab ntab-notes" onclick="setView('notes')">Notes</button>
   </div>
   <div id="error-box" class="error-box" style="display:none;"></div>
-  <div id="view-day">
-    <div class="day-nav" id="day-nav"></div>
-    <div id="day-content"><div class="loading">Syncing with Google Sheets...</div></div>
-  </div>
+  <div id="debug-box" class="debug-box"></div>
+  <div id="view-day"><div class="loading">Connecting to Google Sheets...</div></div>
   <div id="view-dinner" style="display:none"></div>
   <div id="view-habits" style="display:none"></div>
   <div id="view-cleaning" style="display:none"></div>
@@ -174,20 +172,38 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 </div>
 
 <script>
+// ── CONFIG ──
+const SHEET_ID   = '178NK4ZfVFVuwKF5gCLs7QR5NxD8YBXQp-Sk9ETiziEU';
+const GID_WEEKLY = '1269236167';
+const GID_MONTHLY= '1909847739';
 
+// gviz/tq returns JSON that works for publicly shared sheets (no Publish needed)
+function gvizUrl(gid) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&t=${Date.now()}`;
+}
+function gvizUrlByName(name) {
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}&t=${Date.now()}`;
+}
 
-// ── Apps Script relay URL (no CORS issues, no publishing needed) ──
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFyP9N0xbaeeORsbkSnZxQU9vr-nMG1Ve90qP7gZkbl9dxMyAMiiJhIyfQzg1Kq2cZ/exec';
-const GID_WEEKLY  = '1269236167';
-const GID_MONTHLY = '1909847739';
-
-async function fetchCSV(gid) {
-  const url = `${APPS_SCRIPT_URL}?gid=${gid}&t=${Date.now()}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Server returned ${r.status}`);
-  const t = await r.text();
-  if (!t || t.length < 50 || t.includes('<html')) throw new Error('Invalid data received');
-  return t;
+async function fetchSheet(gid, sheetName) {
+  const attempts = [
+    gvizUrl(gid),
+    gvizUrlByName(sheetName),
+    // CORS proxies as fallback
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(gvizUrl(gid))}`,
+    `https://corsproxy.io/?${encodeURIComponent(gvizUrl(gid))}`,
+  ];
+  const errors = [];
+  for (const url of attempts) {
+    try {
+      const r = await fetch(url, {cache:'no-store'});
+      if (!r.ok) { errors.push(`${url.slice(0,60)}... → HTTP ${r.status}`); continue; }
+      const t = await r.text();
+      if (t.length < 30 || t.includes('<!DOCTYPE')) { errors.push(`${url.slice(0,60)}... → bad response`); continue; }
+      return t;
+    } catch(e) { errors.push(`${url.slice(0,60)}... → ${e.message}`); }
+  }
+  throw new Error('All attempts failed:\n' + errors.join('\n'));
 }
 
 const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -195,26 +211,13 @@ const SHORT     = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const DAY_COLS  = [15,18,21,24,27,30,33];
 const HABIT_COLS= [8,9,10,11,12,13,14];
 
-let parsed = null, calMonths = [], activeDay = 0, currentView = 'day', calIdx = 0;
-let taskDone = {}, todoState = {}, dinnerEdits = {};
+let parsed=null, calMonths=[], activeDay=0, currentView='day', calIdx=0;
+let taskDone={}, todoState={}, dinnerEdits={};
 
-function loadSaved(){
-  try {
-    const s = JSON.parse(localStorage.getItem('wplive3') || '{}');
-    taskDone = s.td || {}; todoState = s.ts || {}; dinnerEdits = s.de || {};
-  } catch(e) {}
-}
-function saveState(){
-  try { localStorage.setItem('wplive3', JSON.stringify({td:taskDone, ts:todoState, de:dinnerEdits})); } catch(e) {}
-}
-function getWK(){ return parsed ? parsed.weekStart : 'def'; }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function fmtDate(s){
-  if(!s)return'';
-  const d = s instanceof Date ? s : new Date(s);
-  if(isNaN(d))return String(s);
-  return d.getDate()+' '+d.toLocaleString('en-ZA',{month:'long'});
-}
+function loadSaved(){try{const s=JSON.parse(localStorage.getItem('wplive4')||'{}');taskDone=s.td||{};todoState=s.ts||{};dinnerEdits=s.de||{};}catch(e){}}
+function saveState(){try{localStorage.setItem('wplive4',JSON.stringify({td:taskDone,ts:todoState,de:dinnerEdits}));}catch(e){}}
+function getWK(){return parsed?parsed.weekStart:'def';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function parseCSV(text){
   const rows=[];let inQ=false,cell='',row=[];
@@ -230,47 +233,23 @@ function parseCSV(text){
   if(cell||row.length){row.push(cell.trim());rows.push(row);}
   return rows;
 }
-function cl(v){ return (v||'').replace(/^"|"$/g,'').trim(); }
-function isTRUE(v){ return cl(v).toUpperCase()==='TRUE'; }
-
-function sanitizeTime(s) {
-  if (!s) return '';
-  // If it looks like a full date (e.g. "Dec 31, 1899" or "Jan 1, 1900"), strip it
-  if (/\b(18|19)\d{2}\b/.test(s)) return '';
-  // Already a clean HH:mm
-  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
-  return s;
-}
-
-function fixTime(s) {
-  if (!s) return '';
-  // Google Sheets time bug: "02:00" when it should be "16:00" = UTC vs UTC+2
-  // The raw Date object from Sheets for a time lands on Dec 30/31 1899
-  // When serialised via Apps Script without timezone it comes out as UTC
-  // SA is UTC+2, so we add 2 hours to fix it
-  if (/^\d{1,2}:\d{2}$/.test(s)) {
-    const parts = s.split(':');
-    let h = parseInt(parts[0]) + 2;
-    if (h >= 24) h -= 24;
-    return String(h).padStart(2, '0') + ':' + parts[1];
-  }
-  return sanitizeTime(s);
-}
+function cl(v){return(v||'').replace(/^"|"$/g,'').trim();}
+function isTRUE(v){return cl(v).toUpperCase()==='TRUE';}
 
 function parseWeekly(rows){
   const d={weekStart:'',weekEnd:'',dates:[],focus:[],dinner:[],events:[],tasks:[],habits:[],habitPct:[],cleaning:[],todos:[]};
   const r=rows;
   if(r[3]){d.weekStart=cl(r[3][1]);d.weekEnd=cl(r[3][9]);DAY_COLS.forEach(c=>d.dates.push(cl(r[3][c])));}
-  DAY_COLS.forEach((c)=>{const f=[r[5]?cl(r[5][c]):'',r[6]?cl(r[6][c]):''].filter(Boolean).join(' · ');d.focus.push(f);});
+  DAY_COLS.forEach(c=>{d.focus.push([r[5]?cl(r[5][c]):'',r[6]?cl(r[6][c]):''].filter(Boolean).join(' · '));});
   DAY_COLS.forEach(c=>d.dinner.push(r[8]?cl(r[8][c]):''));
-  DAY_COLS.forEach((c)=>{
+  DAY_COLS.forEach(c=>{
     const evts=[];
-    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:fixTime(cl(r[ri][c+1])),end:fixTime(cl(r[ri][c+2]))});}
+    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:cl(r[ri][c+1]),end:cl(r[ri][c+2])});}
     d.events.push(evts);
   });
   const taskRows=[];
   for(let ri=15;ri<=27;ri++){
-    if(!r[ri])continue;const name0=cl(r[ri][DAY_COLS[0]]);if(!name0)continue;
+    if(!r[ri])continue;const n0=cl(r[ri][DAY_COLS[0]]);if(!n0)continue;
     taskRows.push(DAY_COLS.map(c=>({name:cl(r[ri][c]),done:isTRUE(r[ri][c+2])})));
   }
   DAY_COLS.forEach((_,i)=>d.tasks.push(taskRows.map(row=>row[i]).filter(t=>t&&t.name)));
@@ -335,274 +314,208 @@ function parseMonthly(rows){
 }
 
 async function loadAndRender(){
-  const statusEl = document.getElementById('sync-status');
-  const errEl    = document.getElementById('error-box');
-  statusEl.textContent = 'Syncing...';
-  errEl.style.display  = 'none';
-  let weeklyOk = false;
+  const statusEl=document.getElementById('sync-status');
+  const errEl=document.getElementById('error-box');
+  const dbg=document.getElementById('debug-box');
+  statusEl.textContent='Syncing...';
+  errEl.style.display='none';
+  dbg.style.display='none';
+  let weeklyOk=false;
 
-  try {
-    const text = await fetchCSV(GID_WEEKLY);
-    parsed = parseWeekly(parseCSV(text));
-    weeklyOk = true;
-  } catch(e) {
-    errEl.style.display = 'block';
-    errEl.innerHTML = `<strong>Could not load weekly data.</strong><br>${e.message}<br><br>
-    <strong>Most likely cause:</strong> The app is running as a local file. 
-    Please host it online (see instructions) or open it through a local server.`;
+  try{
+    const text=await fetchSheet(GID_WEEKLY,'Weekly Planner');
+    const rows=parseCSV(text);
+    parsed=parseWeekly(rows);
+    weeklyOk=true;
+    // Show first few cells for debugging
+    dbg.textContent='✓ Loaded '+rows.length+' rows. Row 3 sample: '+JSON.stringify(rows[3]||[]).slice(0,120);
+    dbg.style.display='block';
+    setTimeout(()=>{dbg.style.display='none';},8000);
+  }catch(e){
+    errEl.style.display='block';
+    errEl.innerHTML=`<strong>Could not load your Google Sheet.</strong><br><br>
+    Error: ${e.message}<br><br>
+    <strong>Please check:</strong><br>
+    1. The sheet is shared: <em>Share button → Anyone with the link → Viewer</em><br>
+    2. You have an internet connection<br>
+    3. Try opening this URL directly in your browser to test:<br>
+    <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID_WEEKLY}" target="_blank" style="color:var(--blue);word-break:break-all;">
+    https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID_WEEKLY}</a><br><br>
+    If that link shows your data, press ↻ Sync again.`;
   }
 
-  try {
-    const text2 = await fetchCSV(GID_MONTHLY);
-    if (text2.length > 50) calMonths = parseMonthly(parseCSV(text2));
-  } catch(e) {}
+  try{
+    const text2=await fetchSheet(GID_MONTHLY,'Monthly calendar');
+    if(text2.length>50)calMonths=parseMonthly(parseCSV(text2));
+  }catch(e){}
 
-  statusEl.textContent = weeklyOk ? '✓ Synced' : '⚠ Offline';
-  setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  statusEl.textContent=weeklyOk?'✓ Synced':'⚠ Offline';
+  setTimeout(()=>{statusEl.textContent='';},5000);
 
-  if (weeklyOk) {
-    document.getElementById('week-range').textContent =
-      (parsed.weekStart && parsed.weekEnd) ? fmtDate(parsed.weekStart) + ' – ' + fmtDate(parsed.weekEnd) : '';
-    const today = new Date();
-    activeDay = 0;
-    parsed.dates.forEach((d,i) => {
-      // Try multiple date formats
-      const dt = new Date(d);
-      if (!isNaN(dt) && dt.toDateString() === today.toDateString()) activeDay = i;
-    });
-    renderBanner();
-    renderDayNav();
-    renderDayContent();
-    if (currentView !== 'day') setView(currentView);
+  if(weeklyOk){
+    document.getElementById('week-range').textContent=(parsed.weekStart&&parsed.weekEnd)?parsed.weekStart+' – '+parsed.weekEnd:'';
+    const today=new Date();
+    activeDay=0;
+    parsed.dates.forEach((d,i)=>{const dt=new Date(d);if(!isNaN(dt)&&dt.toDateString()===today.toDateString())activeDay=i;});
+    renderBanner();renderDayNav();renderDayContent();
+    if(currentView!=='day')setView(currentView);
   }
 }
 
 function renderBanner(){
-  const el = document.getElementById('banner-items');
-  const today = new Date();
-  const items = [];
-  const seen = new Set();
-
-  // Pull from monthly calendar CSV data
-  if (calMonths.length) {
-    calMonths.forEach(m => {
-      Object.entries(m.events).forEach(([ds, evts]) => {
-        const evtDate = new Date(m.year, m.month, +ds);
-        const diff = Math.round((evtDate - today) / 86400000);
-        if (diff >= 0 && diff <= 7) {
-          evts.forEach(e => {
-            const key = e.l + '|' + diff;
-            if (!seen.has(key)) {
-              seen.add(key);
-              const dayLabel = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : fmtDate(evtDate);
-              items.push({diff, day: dayLabel, label: e.l, type: e.t});
-            }
-          });
-        }
-      });
+  const el=document.getElementById('banner-items');
+  if(!calMonths.length){el.innerHTML=`<span style="font-size:12px;color:var(--pink-text);">No calendar data loaded.</span>`;return;}
+  const today=new Date(),items=[];
+  calMonths.forEach(m=>{
+    Object.entries(m.events).forEach(([ds,evts])=>{
+      const diff=Math.round((new Date(m.year,m.month,+ds)-today)/86400000);
+      if(diff>=0&&diff<=7)evts.forEach(e=>items.push({diff,day:diff===0?'Today':diff===1?'Tomorrow':`In ${diff}d`,label:e.l,type:e.t}));
     });
-  }
-
-  // Also pull from weekly parsed events (injected by Apps Script)
-  if (parsed && parsed.dates) {
-    parsed.dates.forEach((dateStr, i) => {
-      if (!dateStr) return;
-      const evtDate = new Date(dateStr);
-      if (isNaN(evtDate)) return;
-      const diff = Math.round((evtDate - today) / 86400000);
-      if (diff >= 0 && diff <= 7) {
-        const evts = parsed.events[i] || [];
-        evts.forEach(ev => {
-          const key = ev.name + '|' + diff;
-          if (!seen.has(key)) {
-            seen.add(key);
-            const dayLabel = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : fmtDate(evtDate);
-            items.push({diff, day: dayLabel, label: ev.name, type: 'weekly'});
-          }
-        });
-      }
-    });
-  }
-
-  items.sort((a,b) => a.diff - b.diff);
-  el.innerHTML = items.length
-    ? items.slice(0,8).map(it => `<div class="banner-item"><div class="banner-dot bd-${it.type}"></div><span class="banner-when">${it.day}</span><span>${esc(it.label)}</span></div>`).join('')
-    : `<span style="font-size:12px;color:var(--pink-text);">Nothing in the next 7 days.</span>`;
+  });
+  items.sort((a,b)=>a.diff-b.diff);
+  el.innerHTML=items.length
+    ?items.slice(0,6).map(i=>`<div class="banner-item"><div class="banner-dot bd-${i.type}"></div><span class="banner-when">${i.day}</span><span>${esc(i.label)}</span></div>`).join('')
+    :`<span style="font-size:12px;color:var(--pink-text);">Nothing in the next 7 days.</span>`;
 }
 
-const VIEWS = ['day','dinner','habits','cleaning','todo','calendar','notes'];
+const VIEWS=['day','dinner','habits','cleaning','todo','calendar','notes'];
 function setView(v){
-  currentView = v;
-  VIEWS.forEach(x => document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none');
-  document.querySelectorAll('.ntab').forEach((b,i) => b.classList.toggle('active', VIEWS[i]===v));
-  if (v==='dinner')   renderDinner();
-  if (v==='habits')   renderHabits();
-  if (v==='cleaning') renderCleaning();
-  if (v==='todo')     renderTodo();
-  if (v==='calendar') renderCalendar();
-  if (v==='notes')    renderNotes();
-}
-
-function getMonthlyEventsForDate(dateStr) {
-  if (!dateStr || !calMonths.length) return [];
-  const d = new Date(dateStr);
-  if (isNaN(d)) return [];
-  const dayNum = d.getDate();
-  const month = d.getMonth();
-  const year = d.getFullYear();
-  const m = calMonths.find(m => m.month === month && m.year === year);
-  if (!m || !m.events[dayNum]) return [];
-  return m.events[dayNum];
+  currentView=v;
+  VIEWS.forEach(x=>document.getElementById('view-'+x).style.display=x===v?'block':'none');
+  document.querySelectorAll('.ntab').forEach((b,i)=>b.classList.toggle('active',VIEWS[i]===v));
+  if(v==='dinner')renderDinner();
+  if(v==='habits')renderHabits();
+  if(v==='cleaning')renderCleaning();
+  if(v==='todo')renderTodo();
+  if(v==='calendar')renderCalendar();
+  if(v==='notes')renderNotes();
 }
 
 function renderDayNav(){
-  if (!parsed) return;
-  document.getElementById('day-nav').innerHTML = DAY_NAMES.map((d,i) => `
+  if(!parsed)return;
+  document.getElementById('day-nav').innerHTML=DAY_NAMES.map((d,i)=>`
     <button class="day-btn${i===activeDay?' active':''}" onclick="setDay(${i})">
       <span class="dname">${SHORT[i]}</span>
-      <span class="ddate">${fmtDate(parsed.dates[i]||'')}</span>
+      <span class="ddate">${esc(parsed.dates[i]||'')}</span>
     </button>`).join('');
 }
-function setDay(i){ activeDay=i; renderDayNav(); renderDayContent(); }
+function setDay(i){activeDay=i;renderDayNav();renderDayContent();}
 
 function renderDayContent(){
-  if (!parsed) { document.getElementById('day-content').innerHTML='<div class="loading">Loading...</div>'; return; }
-  const i=activeDay, wk=getWK(); let h='';
-  if (parsed.focus[i])
-    h += `<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
-  // Merge weekly sheet events + monthly calendar events for this date
-  const weeklyEvts = parsed.events[i] || [];
-  const monthlyEvts = getMonthlyEventsForDate(parsed.dates[i]);
-  // Convert monthly events to same shape, avoid duplicates
-  const weeklyNames = weeklyEvts.map(e => e.name.toLowerCase());
-  const extraEvts = monthlyEvts
-    .filter(e => !weeklyNames.some(n => n.includes(e.l.toLowerCase()) || e.l.toLowerCase().includes(n)))
-    .map(e => ({name: e.l, start: '', end: '', type: e.t}));
-  const allEvts = [...weeklyEvts.map(e => ({...e, type: 'weekly'})), ...extraEvts];
-
-  if (allEvts.length){
-    h += `<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
-    allEvts.forEach(ev => {
-      const t = ev.start ? `${ev.start}${ev.end?' – '+ev.end:''}` : '';
-      const dotColor = ev.type === 'weekly' ? 'var(--blue)' :
-        ev.type === 'sport' ? 'var(--blue)' :
-        ev.type === 'test'  ? 'var(--yellow)' :
-        ev.type === 'chess' ? 'var(--green)' :
-        ev.type === 'holiday' ? 'var(--orange)' : 'var(--pink)';
-      h += `<div class="event-row"><div class="event-dot" style="background:${dotColor}"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
+  if(!parsed){document.getElementById('day-content').innerHTML='<div class="loading">Loading...</div>';return;}
+  const i=activeDay,wk=getWK();let h='';
+  if(parsed.focus[i])h+=`<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
+  if(parsed.events[i]&&parsed.events[i].length){
+    h+=`<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
+    parsed.events[i].forEach(ev=>{
+      const t=ev.start?`${ev.start}${ev.end?' – '+ev.end:''}`:'';
+      h+=`<div class="event-row"><div class="event-dot"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
     });
-    h += `</div></div>`;
+    h+=`</div></div>`;
   }
-  const dinVal = (dinnerEdits[wk]&&dinnerEdits[wk][i]!=null) ? dinnerEdits[wk][i] : parsed.dinner[i];
-  if (dinVal)
-    h += `<div class="section"><div class="st st-orange">Dinner</div><div class="card-block card-orange"><div class="dinner-preview"><span style="font-size:14px;">🍽</span><span class="dinner-text">${esc(dinVal)}</span></div></div></div>`;
-  if (parsed.tasks[i] && parsed.tasks[i].length){
-    const td = (taskDone[wk]&&taskDone[wk][i]) || {};
-    const total = parsed.tasks[i].length;
-    const done  = parsed.tasks[i].filter((t,j) => td[j]!=null ? td[j] : t.done).length;
-    const pct   = Math.round(done/total*100);
-    h += `<div class="section"><div class="st st-pink">Tasks</div>
+  const dinVal=(dinnerEdits[wk]&&dinnerEdits[wk][i]!=null)?dinnerEdits[wk][i]:parsed.dinner[i];
+  if(dinVal)h+=`<div class="section"><div class="st st-orange">Dinner</div><div class="card-block card-orange"><div class="dinner-preview"><span style="font-size:14px;">🍽</span><span class="dinner-text">${esc(dinVal)}</span></div></div></div>`;
+  if(parsed.tasks[i]&&parsed.tasks[i].length){
+    const td=(taskDone[wk]&&taskDone[wk][i])||{};
+    const total=parsed.tasks[i].length;
+    const done=parsed.tasks[i].filter((t,j)=>td[j]!=null?td[j]:t.done).length;
+    const pct=Math.round(done/total*100);
+    h+=`<div class="section"><div class="st st-pink">Tasks</div>
     <div class="prog-label">${done} of ${total} done</div>
     <div class="prog-bar" style="background:var(--pink-bg);"><div class="prog-fill" style="width:${pct}%;background:var(--pink);"></div></div>
     <div class="card-block card-pink">`;
-    parsed.tasks[i].forEach((t,j) => {
-      const isDone = td[j]!=null ? td[j] : t.done;
-      h += `<div class="task-row${isDone?' done':''}" onclick="toggleTask(${i},${j})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
+    parsed.tasks[i].forEach((t,j)=>{
+      const isDone=td[j]!=null?td[j]:t.done;
+      h+=`<div class="task-row${isDone?' done':''}" onclick="toggleTask(${i},${j})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
     });
-    h += `</div></div>`;
+    h+=`</div></div>`;
   }
-  if (!parsed.focus[i] && !allEvts.length && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
-    h += `<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
-  document.getElementById('day-content').innerHTML = h;
+  if(!parsed.focus[i]&&(!parsed.events[i]||!parsed.events[i].length)&&!dinVal&&(!parsed.tasks[i]||!parsed.tasks[i].length))
+    h+=`<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
+  document.getElementById('day-content').innerHTML=h;
 }
 function toggleTask(d,t){
-  const wk=getWK();
-  if(!taskDone[wk])taskDone[wk]={};
-  if(!taskDone[wk][d])taskDone[wk][d]={};
-  const cur = taskDone[wk][d][t]!=null ? taskDone[wk][d][t] : (parsed.tasks[d][t]&&parsed.tasks[d][t].done);
-  taskDone[wk][d][t]=!cur; saveState(); renderDayContent();
+  const wk=getWK();if(!taskDone[wk])taskDone[wk]={};if(!taskDone[wk][d])taskDone[wk][d]={};
+  const cur=taskDone[wk][d][t]!=null?taskDone[wk][d][t]:(parsed.tasks[d][t]&&parsed.tasks[d][t].done);
+  taskDone[wk][d][t]=!cur;saveState();renderDayContent();
 }
 
 function renderDinner(){
-  if (!parsed) { document.getElementById('view-dinner').innerHTML='<div class="loading">Loading...</div>'; return; }
+  if(!parsed){document.getElementById('view-dinner').innerHTML='<div class="loading">Loading...</div>';return;}
   const wk=getWK();
   let h=`<div class="section"><div class="st st-orange">This week's dinners</div><div class="card-block card-orange">`;
-  DAY_NAMES.forEach((day,i) => {
-    const val = (dinnerEdits[wk]&&dinnerEdits[wk][i]!=null) ? dinnerEdits[wk][i] : parsed.dinner[i];
-    const isT = i===activeDay;
-    h += `<div class="dinner-plan-row"><span class="dp-day${isT?' today':''}">${SHORT[i]}</span>
+  DAY_NAMES.forEach((day,i)=>{
+    const val=(dinnerEdits[wk]&&dinnerEdits[wk][i]!=null)?dinnerEdits[wk][i]:parsed.dinner[i];
+    const isT=i===activeDay;
+    h+=`<div class="dinner-plan-row"><span class="dp-day${isT?' today':''}">${SHORT[i]}</span>
     <input class="dp-input" id="dp-${i}" type="text" placeholder="What's for dinner?" value="${esc(val||'')}" oninput="saveDinner(${i},this.value)">
     <span class="dp-saved" id="dps-${i}">✓</span></div>`;
   });
-  h += `</div></div><p style="font-size:11px;color:var(--muted);">Edits save locally. Hit ↻ Sync to reload from sheet.</p>`;
-  document.getElementById('view-dinner').innerHTML = h;
+  h+=`</div></div><p style="font-size:11px;color:var(--muted);">Edits save locally. Hit ↻ Sync to reload from sheet.</p>`;
+  document.getElementById('view-dinner').innerHTML=h;
 }
 function saveDinner(i,val){
-  const wk=getWK();
-  if(!dinnerEdits[wk])dinnerEdits[wk]={};
-  dinnerEdits[wk][i]=val; saveState();
-  const s=document.getElementById('dps-'+i);
-  if(s){s.classList.add('show');setTimeout(()=>s.classList.remove('show'),1500);}
+  const wk=getWK();if(!dinnerEdits[wk])dinnerEdits[wk]={};dinnerEdits[wk][i]=val;saveState();
+  const s=document.getElementById('dps-'+i);if(s){s.classList.add('show');setTimeout(()=>s.classList.remove('show'),1500);}
 }
 
 function renderHabits(){
-  if (!parsed||!parsed.habits.length) { document.getElementById('view-habits').innerHTML='<div class="loading">No habit data.</div>'; return; }
+  if(!parsed||!parsed.habits.length){document.getElementById('view-habits').innerHTML='<div class="loading">No habit data.</div>';return;}
   let h=`<div class="section"><div class="st st-green">Weekly habits</div><div class="card-block card-green">`;
-  parsed.habits.forEach(hb => {
-    h += `<div class="habit-row"><span class="habit-name">${esc(hb.name)}</span><div class="dots">`;
-    hb.days.forEach((d,i) => h += `<div class="dot ${d?'dot-on-green':'dot-off-green'}" title="${SHORT[i]}"></div>`);
-    h += `</div></div>`;
+  parsed.habits.forEach(hb=>{
+    h+=`<div class="habit-row"><span class="habit-name">${esc(hb.name)}</span><div class="dots">`;
+    hb.days.forEach((d,i)=>h+=`<div class="dot ${d?'dot-on-green':'dot-off-green'}" title="${SHORT[i]}"></div>`);
+    h+=`</div></div>`;
   });
-  h += `</div></div>`;
-  if (parsed.habitPct&&parsed.habitPct.length){
-    h += `<div class="section"><div class="st st-green">Daily completion</div><div class="card-block card-green">`;
-    DAY_NAMES.forEach((d,i) => h += `<div class="habit-row"><span class="habit-name">${d}</span><span class="pct-badge">${parsed.habitPct[i]||0}%</span></div>`);
-    h += `</div></div>`;
+  h+=`</div></div>`;
+  if(parsed.habitPct&&parsed.habitPct.length){
+    h+=`<div class="section"><div class="st st-green">Daily completion</div><div class="card-block card-green">`;
+    DAY_NAMES.forEach((d,i)=>h+=`<div class="habit-row"><span class="habit-name">${d}</span><span class="pct-badge">${parsed.habitPct[i]||0}%</span></div>`);
+    h+=`</div></div>`;
   }
-  document.getElementById('view-habits').innerHTML = h;
+  document.getElementById('view-habits').innerHTML=h;
 }
 
 function renderCleaning(){
-  if (!parsed||!parsed.cleaning.length) { document.getElementById('view-cleaning').innerHTML='<div class="loading">No cleaning data.</div>'; return; }
+  if(!parsed||!parsed.cleaning.length){document.getElementById('view-cleaning').innerHTML='<div class="loading">No cleaning data.</div>';return;}
   let h=`<div class="section"><div class="st st-teal">Cleaning schedule</div>
   <div style="display:flex;gap:5px;margin-bottom:8px;">
     ${SHORT.map(s=>`<span style="font-size:10px;color:var(--teal-text);font-weight:500;min-width:13px;text-align:center;">${s[0]}</span>`).join('')}
   </div><div class="card-block card-teal">`;
-  parsed.cleaning.forEach(c => {
-    h += `<div class="clean-row"><span class="clean-name">${esc(c.name)}</span><div class="dots">`;
-    c.days.forEach(d => h += `<div class="dot ${d?'dot-on-teal':'dot-off-teal'}"></div>`);
-    h += `</div></div>`;
+  parsed.cleaning.forEach(c=>{
+    h+=`<div class="clean-row"><span class="clean-name">${esc(c.name)}</span><div class="dots">`;
+    c.days.forEach(d=>h+=`<div class="dot ${d?'dot-on-teal':'dot-off-teal'}"></div>`);
+    h+=`</div></div>`;
   });
-  h += `</div></div>`;
-  document.getElementById('view-cleaning').innerHTML = h;
+  h+=`</div></div>`;
+  document.getElementById('view-cleaning').innerHTML=h;
 }
 
 function renderTodo(){
-  if (!parsed||!parsed.todos.length) { document.getElementById('view-todo').innerHTML='<div class="loading">No to-do data.</div>'; return; }
-  const wk=getWK(), ts=todoState[wk]||{};
+  if(!parsed||!parsed.todos.length){document.getElementById('view-todo').innerHTML='<div class="loading">No to-do data.</div>';return;}
+  const wk=getWK(),ts=todoState[wk]||{};
   const done=parsed.todos.filter((t,i)=>ts[i]!=null?ts[i]:t.done).length;
-  const total=parsed.todos.length, pct=Math.round(done/total*100);
+  const total=parsed.todos.length,pct=Math.round(done/total*100);
   let h=`<div class="section">
     <div class="prog-label">${done} of ${total} complete (${pct}%)</div>
     <div class="prog-bar" style="background:var(--blue-bg);"><div class="prog-fill" style="width:${pct}%;background:var(--blue);"></div></div>
     <div class="card-block card-blue" style="margin-top:8px;">`;
-  parsed.todos.forEach((t,i) => {
+  parsed.todos.forEach((t,i)=>{
     const isDone=ts[i]!=null?ts[i]:t.done;
-    h += `<div class="todo-row${isDone?' done':''}" onclick="toggleTodo(${i})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
+    h+=`<div class="todo-row${isDone?' done':''}" onclick="toggleTodo(${i})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
   });
-  h += `</div></div>`;
-  document.getElementById('view-todo').innerHTML = h;
+  h+=`</div></div>`;
+  document.getElementById('view-todo').innerHTML=h;
 }
 function toggleTodo(i){
-  const wk=getWK();
-  if(!todoState[wk])todoState[wk]={};
+  const wk=getWK();if(!todoState[wk])todoState[wk]={};
   const cur=todoState[wk][i]!=null?todoState[wk][i]:parsed.todos[i].done;
-  todoState[wk][i]=!cur; saveState(); renderTodo();
+  todoState[wk][i]=!cur;saveState();renderTodo();
 }
 
 function renderCalendar(){
   const el=document.getElementById('view-calendar');
-  if (!calMonths.length) { el.innerHTML='<div class="loading">No calendar data. Make sure the monthly tab is published as CSV and hit ↻ Sync.</div>'; return; }
+  if(!calMonths.length){el.innerHTML='<div class="loading">No calendar data. Make sure the monthly tab is also shared and hit ↻ Sync.</div>';return;}
   const m=calMonths[Math.min(calIdx,calMonths.length-1)];
   let h=`<div class="month-nav">
     <button class="month-nav-btn" onclick="prevMonth()">← Prev</button>
@@ -620,7 +533,7 @@ function renderCalendar(){
   ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>h+=`<div class="cal-head">${d}</div>`);
   for(let i=0;i<m.firstDayOfWeek;i++)h+=`<div class="cal-cell empty"></div>`;
   for(let d=1;d<=m.days;d++){
-    const isT=d===m.todayDay, evts=m.events[d]||[];
+    const isT=d===m.todayDay,evts=m.events[d]||[];
     h+=`<div class="cal-cell${isT?' today-cell':''}"><div class="cal-num">${d}</div>`;
     evts.slice(0,3).forEach(e=>h+=`<div class="cal-evt ${e.t}">${esc(e.l)}</div>`);
     if(evts.length>3)h+=`<div class="cal-evt other">+${evts.length-3} meer</div>`;
@@ -631,20 +544,20 @@ function renderCalendar(){
   h+=`</div>`;
   el.innerHTML=h;
 }
-function prevMonth(){ if(calIdx>0){calIdx--;renderCalendar();} }
-function nextMonth(){ if(calIdx<calMonths.length-1){calIdx++;renderCalendar();} }
+function prevMonth(){if(calIdx>0){calIdx--;renderCalendar();}}
+function nextMonth(){if(calIdx<calMonths.length-1){calIdx++;renderCalendar();}}
 
 function renderNotes(){
-  let n=''; try{n=localStorage.getItem('wp_notes3')||'';}catch(e){}
+  let n='';try{n=localStorage.getItem('wp_notes4')||'';}catch(e){}
   document.getElementById('view-notes').innerHTML=`
     <div class="section"><div class="st st-pink">Weekly notes</div>
       <textarea class="notes-area" id="notes-ta" placeholder="Jot down anything for this week...">${esc(n)}</textarea>
       <div class="notes-saved" id="notes-saved"></div>
     </div>`;
   document.getElementById('notes-ta').addEventListener('input',function(){
-    try{localStorage.setItem('wp_notes3',this.value);}catch(e){}
+    try{localStorage.setItem('wp_notes4',this.value);}catch(e){}
     const s=document.getElementById('notes-saved');
-    s.textContent='✓ Saved'; setTimeout(()=>{s.textContent='';},2000);
+    s.textContent='✓ Saved';setTimeout(()=>{s.textContent='';},2000);
   });
 }
 
