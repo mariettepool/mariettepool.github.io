@@ -134,7 +134,6 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 .notes-saved{font-size:11px;color:var(--green);margin-top:6px;height:14px;font-weight:500;}
 .loading{text-align:center;padding:2rem;color:var(--muted);font-size:13px;}
 .error-box{background:#FCEBEB;border:1.5px solid #F09595;border-radius:var(--radius);padding:12px 14px;font-size:13px;color:#791F1F;margin-bottom:1rem;line-height:1.8;}
-.debug-box{background:var(--blue-bg);border:1px solid var(--blue);border-radius:var(--radius);padding:10px 14px;font-size:11px;color:var(--blue-text);margin-bottom:1rem;font-family:monospace;white-space:pre-wrap;display:none;}
 </style>
 </head>
 <body>
@@ -161,7 +160,6 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
     <button class="ntab ntab-notes" onclick="setView('notes')">Notes</button>
   </div>
   <div id="error-box" class="error-box" style="display:none;"></div>
-  <div id="debug-box" class="debug-box"></div>
   <div id="view-day"><div class="loading">Connecting to Google Sheets...</div></div>
   <div id="view-dinner" style="display:none"></div>
   <div id="view-habits" style="display:none"></div>
@@ -172,140 +170,226 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 </div>
 
 <script>
-// ── CONFIG ──
-const SHEET_ID   = '178NK4ZfVFVuwKF5gCLs7QR5NxD8YBXQp-Sk9ETiziEU';
-const GID_WEEKLY = '1269236167';
-const GID_MONTHLY= '1909847739';
+const SHEET_ID    = '178NK4ZfVFVuwKF5gCLs7QR5NxD8YBXQp-Sk9ETiziEU';
+const GID_WEEKLY  = '1269236167';
+const GID_MONTHLY = '1909847739';
 
-// gviz/tq returns JSON that works for publicly shared sheets (no Publish needed)
-function gvizUrl(gid) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&t=${Date.now()}`;
-}
-function gvizUrlByName(name) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}&t=${Date.now()}`;
+// JSONP fetch — works from file:// and any web server
+function fetchSheetJSONP(gid) {
+  return new Promise((resolve, reject) => {
+    const cbName = '_gs_' + gid + '_' + Date.now();
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&cb=${cbName}&gid=${gid}&t=${Date.now()}`;
+    let done = false;
+    const timer = setTimeout(() => { if(!done){done=true;cleanup();reject(new Error('Timeout after 10s'));}}, 10000);
+    window[cbName] = (data) => {
+      if(done)return; done=true; cleanup();
+      try {
+        const cols = data.table.cols || [];
+        const rows = (data.table.rows || []).map(row =>
+          cols.map((_, ci) => {
+            const cell = row.c && row.c[ci];
+            if (!cell || cell.v === null || cell.v === undefined) return '';
+            // gviz returns dates as "Date(2026,3,27)" — convert to readable
+            if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+              const parts = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+              if (parts) {
+                const d = new Date(parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3]));
+                return d.toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
+              }
+            }
+            // Use formatted value if available, else raw
+            return cell.f !== undefined && cell.f !== null ? String(cell.f) : String(cell.v);
+          })
+        );
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    function cleanup(){ clearTimeout(timer); delete window[cbName]; const s=document.getElementById('_s_'+cbName); if(s)s.remove(); }
+    const script = document.createElement('script');
+    script.id = '_s_' + cbName;
+    script.onerror = () => { if(!done){done=true;cleanup();reject(new Error('Failed to load script'));} };
+    script.src = url;
+    document.head.appendChild(script);
+  });
 }
 
-async function fetchSheet(gid, sheetName) {
-  const attempts = [
-    gvizUrl(gid),
-    gvizUrlByName(sheetName),
-    // CORS proxies as fallback
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(gvizUrl(gid))}`,
-    `https://corsproxy.io/?${encodeURIComponent(gvizUrl(gid))}`,
-  ];
-  const errors = [];
-  for (const url of attempts) {
-    try {
-      const r = await fetch(url, {cache:'no-store'});
-      if (!r.ok) { errors.push(`${url.slice(0,60)}... → HTTP ${r.status}`); continue; }
-      const t = await r.text();
-      if (t.length < 30 || t.includes('<!DOCTYPE')) { errors.push(`${url.slice(0,60)}... → bad response`); continue; }
-      return t;
-    } catch(e) { errors.push(`${url.slice(0,60)}... → ${e.message}`); }
-  }
-  throw new Error('All attempts failed:\n' + errors.join('\n'));
+async function fetchSheet(gid) {
+  return await fetchSheetJSONP(gid);
 }
 
 const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const SHORT     = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+// Mon=col15, Tue=col18, Wed=col21, Thu=col24, Fri=col27, Sat=col30, Sun=col33
 const DAY_COLS  = [15,18,21,24,27,30,33];
 const HABIT_COLS= [8,9,10,11,12,13,14];
 
 let parsed=null, calMonths=[], activeDay=0, currentView='day', calIdx=0;
 let taskDone={}, todoState={}, dinnerEdits={};
 
-function loadSaved(){try{const s=JSON.parse(localStorage.getItem('wplive4')||'{}');taskDone=s.td||{};todoState=s.ts||{};dinnerEdits=s.de||{};}catch(e){}}
-function saveState(){try{localStorage.setItem('wplive4',JSON.stringify({td:taskDone,ts:todoState,de:dinnerEdits}));}catch(e){}}
+function loadSaved(){try{const s=JSON.parse(localStorage.getItem('wplive6')||'{}');taskDone=s.td||{};todoState=s.ts||{};dinnerEdits=s.de||{};}catch(e){}}
+function saveState(){try{localStorage.setItem('wplive6',JSON.stringify({td:taskDone,ts:todoState,de:dinnerEdits}));}catch(e){}}
 function getWK(){return parsed?parsed.weekStart:'def';}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function g(rows,ri,ci){return rows[ri]?(rows[ri][ci]||'').replace(/^"|"$/g,'').trim():'';}
+function isT(v){return (v||'').replace(/^"|"$/g,'').trim().toUpperCase()==='TRUE';}
 
-function parseCSV(text){
-  const rows=[];let inQ=false,cell='',row=[];
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(c==='"'){inQ=!inQ;}
-    else if(c===','&&!inQ){row.push(cell.trim());cell='';}
-    else if((c==='\n'||c==='\r')&&!inQ){
-      if(c==='\r'&&text[i+1]==='\n')i++;
-      row.push(cell.trim());rows.push(row);row=[];cell='';
-    }else cell+=c;
-  }
-  if(cell||row.length){row.push(cell.trim());rows.push(row);}
-  return rows;
-}
-function cl(v){return(v||'').replace(/^"|"$/g,'').trim();}
-function isTRUE(v){return cl(v).toUpperCase()==='TRUE';}
+function parseWeekly(rows) {
+  const d = {
+    weekStart:'', weekEnd:'',
+    dates:[], focus:[], dinner:[], events:[],
+    tasks:[], habits:[], habitPct:[], cleaning:[], todos:[]
+  };
 
-function parseWeekly(rows){
-  const d={weekStart:'',weekEnd:'',dates:[],focus:[],dinner:[],events:[],tasks:[],habits:[],habitPct:[],cleaning:[],todos:[]};
-  const r=rows;
-  if(r[3]){d.weekStart=cl(r[3][1]);d.weekEnd=cl(r[3][9]);DAY_COLS.forEach(c=>d.dates.push(cl(r[3][c])));}
-  DAY_COLS.forEach(c=>{d.focus.push([r[5]?cl(r[5][c]):'',r[6]?cl(r[6][c]):''].filter(Boolean).join(' · '));});
-  DAY_COLS.forEach(c=>d.dinner.push(r[8]?cl(r[8][c]):''));
-  DAY_COLS.forEach(c=>{
-    const evts=[];
-    for(let ri=10;ri<=12;ri++){if(!r[ri])continue;const name=cl(r[ri][c]);if(name)evts.push({name,start:cl(r[ri][c+1]),end:cl(r[ri][c+2])});}
+  // ROW 1 (idx 1): dates at day cols
+  DAY_COLS.forEach(c => d.dates.push(g(rows,1,c)));
+  d.weekStart = d.dates[0] || '';
+  d.weekEnd   = d.dates[6] || '';
+
+  // ROW 3 (idx 3): focus text at day cols
+  DAY_COLS.forEach(c => d.focus.push(g(rows,3,c)));
+
+  // ROW 6 (idx 6): dinner — value is at day col+2 (layout: label, "", value, label, "", value...)
+  // Actually from CSV: col15=blank, col16=blank, col17=FALSE(done), col18=dinner_name...
+  // Pattern per day: dayCol = label("AANDETE"), dayCol+1 = blank, dayCol+2 = done checkbox
+  // Dinner name is on ROW 6 at dayCol+... let me check: row 6 idx=5 is "AANDETE" headers
+  // Row 7 (idx 6) has the actual dinner values at col 18 = "Hoenderpasta" etc
+  // Col layout for dinner row: [dayCol]=blank, [dayCol+1]=blank, [dayCol+2]=done, BUT dinner name is at dayCol+3? No...
+  // From CSV row 7: col15="", col16="", col17=FALSE, col18="Hoenderpasta", col19="", col20=FALSE...
+  // So dinner for Mon is at col 18 = DAY_COLS[1] = Tuesday? No...
+  // Let me re-read: DAY_COLS = [15,18,21,24,27,30,33]
+  // Row 6 (0-indexed): "","","1","2","3","","5","","","","","","","","","","","FALSE","Hoenderpasta","","FALSE","Blokkiesvleis"...
+  // col15="" col16="" col17=FALSE col18=Hoenderpasta col19="" col20=FALSE col21=Blokkiesvleis...
+  // So col17 = done for Mon, col18 = dinner for TUE? That seems off by one...
+  // Actually: col15=Mon_name(blank here), col16=blank, col17=Mon_done(FALSE)
+  // col18=Tue_name(Hoenderpasta), col19=blank, col20=Tue_done(FALSE)
+  // Wait — col15 should be Mon. But col15 is blank and col18 has the dinner.
+  // The dinner name must be at dayCol for the NEXT day. Let me use offset +0 but skip if blank, try +3
+  // Actually simplest: for each day, try dayCol first, if blank try dayCol-3 (previous)
+  // From data: Mon(col15)=blank, Tue(col18)=Hoenderpasta, Wed(col21)=Blokkiesvleis, Thu(col24)=Wraps
+  // So Tuesday through the columns have the dinners. Mon is blank (Public Holiday).
+  // The pattern is: dinner name IS at the day column, just Monday is empty this week.
+  DAY_COLS.forEach(c => {
+    // try col, then col+1, then col+2 for a non-empty non-boolean value
+    let val = '';
+    for (let offset = 0; offset <= 2; offset++) {
+      const v = g(rows, 6, c + offset);
+      if (v && v !== 'FALSE' && v !== 'TRUE' && v !== 'AANDETE' && v !== 'EVENTS' && v !== 'TASKS') {
+        val = v; break;
+      }
+    }
+    d.dinner.push(val);
+  });
+
+  // ROWS 8-10 (idx 8-10): events — name at dayCol, start at dayCol+1, end at dayCol+2
+  DAY_COLS.forEach(c => {
+    const evts = [];
+    for (let ri = 8; ri <= 10; ri++) {
+      const name = g(rows, ri, c);
+      if (name && name !== 'FALSE' && name !== 'TRUE') {
+        evts.push({ name, start: g(rows,ri,c+1), end: g(rows,ri,c+2) });
+      }
+    }
     d.events.push(evts);
   });
-  const taskRows=[];
-  for(let ri=15;ri<=27;ri++){
-    if(!r[ri])continue;const n0=cl(r[ri][DAY_COLS[0]]);if(!n0)continue;
-    taskRows.push(DAY_COLS.map(c=>({name:cl(r[ri][c]),done:isTRUE(r[ri][c+2])})));
+
+  // ROWS 13-22 (idx 13-22): tasks
+  // Each task row: name at dayCol, done(TRUE/FALSE) at dayCol+1
+  // BUT the task names for each day are stacked vertically
+  // From CSV row 13: col15="",col16="",col17=FALSE, col18="Vat Skye...",col19="",col20=FALSE, col21="BMH Week 10"...
+  // So task name for Mon is at col15 (blank=no task), Tue at col18, etc.
+  // Actually name IS at dayCol and done IS at dayCol+2 (skipping blank col)
+  // Col15=name, col16=blank, col17=done; col18=name, col19=blank, col20=done
+  const tasksByDay = DAY_COLS.map(() => []);
+  for (let ri = 13; ri <= 23; ri++) {
+    if (!rows[ri]) continue;
+    DAY_COLS.forEach((c, di) => {
+      const name = g(rows, ri, c);
+      const done = isT(g(rows, ri, c+2));
+      if (name && name !== 'FALSE' && name !== 'TRUE' && name !== 'TASKS' && name !== '0%') {
+        tasksByDay[di].push({ name, done });
+      }
+    });
   }
-  DAY_COLS.forEach((_,i)=>d.tasks.push(taskRows.map(row=>row[i]).filter(t=>t&&t.name)));
-  for(let ri=17;ri<=27;ri++){
-    if(!r[ri])continue;const name=cl(r[ri][0]);
-    if(!name||name.toLowerCase().startsWith('habits'))continue;
-    d.habits.push({name,days:HABIT_COLS.map(c=>isTRUE(r[ri][c])?1:0)});
+  d.tasks = tasksByDay;
+
+  // ROWS 15-25 (idx 15-24): habits — name at col0, M-S bools at HABIT_COLS (8-14)
+  for (let ri = 15; ri <= 24; ri++) {
+    if (!rows[ri]) continue;
+    const name = g(rows, ri, 0);
+    if (!name || name.toUpperCase().startsWith('HABIT') || name.toUpperCase().startsWith('WEEKLY') ||
+        name.toUpperCase().startsWith('STRETCH')) {
+      // include Stretch
+    }
+    if (!name) continue;
+    const skip = ['WEEKLY PLAN','WEEKLY HABITS','WEEKLY TO-DO','CLEANING','HABITS %','TOTAL'];
+    if (skip.some(s => name.toUpperCase().startsWith(s))) continue;
+    d.habits.push({ name, days: HABIT_COLS.map(c => isT(g(rows, ri, c)) ? 1 : 0) });
   }
-  if(r[27])d.habitPct=HABIT_COLS.map(c=>parseInt(cl(r[27][c]))||0);
-  for(let ri=37;ri<=47;ri++){if(!r[ri])continue;const name=cl(r[ri][0]);if(!name)continue;d.cleaning.push({name,days:HABIT_COLS.map(c=>isTRUE(r[ri][c])?1:0)});}
-  for(let ri=30;ri<=35;ri++){
-    if(!r[ri])continue;
-    const n1=cl(r[ri][0]),d1=isTRUE(r[ri][5]),n2=cl(r[ri][8]),d2=isTRUE(r[ri][13]);
-    if(n1)d.todos.push({name:n1,done:d1});if(n2)d.todos.push({name:n2,done:d2});
+
+  // ROW 25 (idx 25): Habits %
+  if (rows[25]) d.habitPct = HABIT_COLS.map(c => parseInt(g(rows,25,c)) || 0);
+
+  // ROWS 27-31 (idx 27-31): To-dos — name col0, done col5; name col8, done col13
+  for (let ri = 27; ri <= 31; ri++) {
+    if (!rows[ri]) continue;
+    const n1 = g(rows,ri,0), done1 = isT(g(rows,ri,5));
+    const n2 = g(rows,ri,8), done2 = isT(g(rows,ri,13));
+    const skip = ['WEEKLY TO-DO','TOTAL',''];
+    if (n1 && !skip.some(s => n1.toUpperCase().startsWith(s))) d.todos.push({name:n1, done:done1});
+    if (n2 && !skip.some(s => n2.toUpperCase().startsWith(s))) d.todos.push({name:n2, done:done2});
   }
+
+  // ROWS 34-44 (idx 34-44): Cleaning — name col0, M-S bools at HABIT_COLS
+  for (let ri = 34; ri <= 44; ri++) {
+    if (!rows[ri]) continue;
+    const name = g(rows, ri, 0);
+    if (!name) continue;
+    const skip = ['CLEANING','WEEKLY'];
+    if (skip.some(s => name.toUpperCase().startsWith(s))) continue;
+    d.cleaning.push({ name, days: HABIT_COLS.map(c => isT(g(rows, ri, c)) ? 1 : 0) });
+  }
+
   return d;
 }
 
-function classifyEvent(name){
-  const n=name.toLowerCase();
-  if(/skaak|chess/.test(n))return'chess';
-  if(/rugby|atletiek|landloop/.test(n))return'sport';
-  if(/toets|klastoets|kwartaal|spelling|ondersoek|kontrole|voordra|inhandig|prepared speech|transaksionele|advertensie|prakties|hoofrekene|gedig|storieboek/.test(n))return'test';
-  if(/vakansie|vryheids|jeugdag|werkersdag|sluit/.test(n))return'holiday';
-  return'other';
+function classifyEvent(name) {
+  const n = name.toLowerCase();
+  if (/skaak|chess/.test(n)) return 'chess';
+  if (/rugby|atletiek|landloop/.test(n)) return 'sport';
+  if (/toets|klastoets|kwartaal|spelling|ondersoek|kontrole|voordra|inhandig|prepared speech|transaksionele|advertensie|prakties|hoofrekene|gedig|storieboek/.test(n)) return 'test';
+  if (/vakansie|vryheids|jeugdag|werkersdag|sluit|public holiday/.test(n)) return 'holiday';
+  return 'other';
 }
 
-function parseMonthly(rows){
-  const months=[];let cur=null;
-  const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const DC=[0,2,4,6,8,10,12];
-  for(let ri=0;ri<rows.length;ri++){
-    const row=rows[ri],c0=cl(row[0]);
-    const mM=MN.find(m=>c0.startsWith(m));
-    if(mM){
-      const ym=c0.match(/\d{4}/),year=ym?parseInt(ym[0]):new Date().getFullYear(),mi=MN.indexOf(mM);
-      cur={name:c0,year,month:mi,events:{},days:new Date(year,mi+1,0).getDate(),firstDayOfWeek:0,todayDay:null};
-      months.push(cur);ri+=2;continue;
+function parseMonthly(rows) {
+  const months = []; let cur = null;
+  const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DC = [0,2,4,6,8,10,12];
+  for (let ri = 0; ri < rows.length; ri++) {
+    const row = rows[ri], c0 = g(rows,ri,0);
+    const mM = MN.find(m => c0.startsWith(m));
+    if (mM) {
+      const ym = c0.match(/\d{4}/), year = ym ? parseInt(ym[0]) : new Date().getFullYear(), mi = MN.indexOf(mM);
+      cur = {name:c0, year, month:mi, events:{}, days:new Date(year,mi+1,0).getDate(), firstDayOfWeek:0, todayDay:null};
+      months.push(cur); ri += 2; continue;
     }
-    if(!cur)continue;
-    const dn=parseInt(c0);
-    if(!isNaN(dn)&&dn>=1&&dn<=31){
-      const wdays=DC.map(c=>{const v=cl(row[c]);return parseInt(v)||null;});
-      wdays.forEach((d,i)=>{if(d===1)cur.firstDayOfWeek=i;});
-      const today=new Date();
-      wdays.forEach(d=>{if(d&&new Date(cur.year,cur.month,d).toDateString()===today.toDateString())cur.todayDay=d;});
-      for(let er=ri+1;er<Math.min(ri+7,rows.length);er++){
-        const erow=rows[er],e0=cl(erow[0]);
-        if(!isNaN(parseInt(e0))&&parseInt(e0)>=1)break;
-        if(MN.find(m=>e0.startsWith(m)))break;
-        DC.forEach((c,di)=>{
-          const evtName=cl(erow[c]);
-          if(!evtName||evtName==='FALSE'||evtName==='TRUE')return;
-          const d=wdays[di];if(!d)return;
-          if(!cur.events[d])cur.events[d]=[];
-          cur.events[d].push({t:classifyEvent(evtName),l:evtName});
+    if (!cur) continue;
+    const dn = parseInt(c0);
+    if (!isNaN(dn) && dn >= 1 && dn <= 31) {
+      const wdays = DC.map(c => { const v = g(rows,ri,c); return parseInt(v) || null; });
+      wdays.forEach((d,i) => { if (d === 1) cur.firstDayOfWeek = i; });
+      const today = new Date();
+      wdays.forEach(d => { if (d && new Date(cur.year,cur.month,d).toDateString()===today.toDateString()) cur.todayDay = d; });
+      for (let er = ri+1; er < Math.min(ri+7, rows.length); er++) {
+        const e0 = g(rows,er,0);
+        if (!isNaN(parseInt(e0)) && parseInt(e0) >= 1) break;
+        if (MN.find(m => e0.startsWith(m))) break;
+        DC.forEach((c,di) => {
+          const evtName = g(rows,er,c);
+          if (!evtName || evtName === 'FALSE' || evtName === 'TRUE') return;
+          const d = wdays[di]; if (!d) return;
+          if (!cur.events[d]) cur.events[d] = [];
+          cur.events[d].push({t: classifyEvent(evtName), l: evtName});
         });
       }
     }
@@ -313,211 +397,211 @@ function parseMonthly(rows){
   return months;
 }
 
-async function loadAndRender(){
-  const statusEl=document.getElementById('sync-status');
-  const errEl=document.getElementById('error-box');
-  const dbg=document.getElementById('debug-box');
-  statusEl.textContent='Syncing...';
-  errEl.style.display='none';
-  dbg.style.display='none';
-  let weeklyOk=false;
+async function loadAndRender() {
+  const statusEl = document.getElementById('sync-status');
+  const errEl = document.getElementById('error-box');
+  statusEl.textContent = 'Syncing...';
+  errEl.style.display = 'none';
+  let weeklyOk = false;
 
-  try{
-    const text=await fetchSheet(GID_WEEKLY,'Weekly Planner');
-    const rows=parseCSV(text);
-    parsed=parseWeekly(rows);
-    weeklyOk=true;
-    // Show first few cells for debugging
-    dbg.textContent='✓ Loaded '+rows.length+' rows. Row 3 sample: '+JSON.stringify(rows[3]||[]).slice(0,120);
-    dbg.style.display='block';
-    setTimeout(()=>{dbg.style.display='none';},8000);
-  }catch(e){
-    errEl.style.display='block';
-    errEl.innerHTML=`<strong>Could not load your Google Sheet.</strong><br><br>
-    Error: ${e.message}<br><br>
-    <strong>Please check:</strong><br>
-    1. The sheet is shared: <em>Share button → Anyone with the link → Viewer</em><br>
-    2. You have an internet connection<br>
-    3. Try opening this URL directly in your browser to test:<br>
-    <a href="https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID_WEEKLY}" target="_blank" style="color:var(--blue);word-break:break-all;">
-    https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID_WEEKLY}</a><br><br>
-    If that link shows your data, press ↻ Sync again.`;
+  try {
+    const rows = await fetchSheet(GID_WEEKLY);
+    parsed = parseWeekly(rows);
+    weeklyOk = true;
+  } catch(e) {
+    errEl.style.display = 'block';
+    errEl.innerHTML = `<strong>Could not load sheet.</strong><br>${esc(e.message)}<br><br>Make sure the sheet is shared: <em>Share → Anyone with the link → Viewer</em>`;
   }
 
-  try{
-    const text2=await fetchSheet(GID_MONTHLY,'Monthly calendar');
-    if(text2.length>50)calMonths=parseMonthly(parseCSV(text2));
-  }catch(e){}
+  try {
+    const rows2 = await fetchSheet(GID_MONTHLY);
+    calMonths = parseMonthly(rows2);
+  } catch(e) {}
 
-  statusEl.textContent=weeklyOk?'✓ Synced':'⚠ Offline';
-  setTimeout(()=>{statusEl.textContent='';},5000);
+  statusEl.textContent = weeklyOk ? '✓ Synced' : '⚠ Offline';
+  setTimeout(() => { statusEl.textContent = ''; }, 4000);
 
-  if(weeklyOk){
-    document.getElementById('week-range').textContent=(parsed.weekStart&&parsed.weekEnd)?parsed.weekStart+' – '+parsed.weekEnd:'';
-    const today=new Date();
-    activeDay=0;
-    parsed.dates.forEach((d,i)=>{const dt=new Date(d);if(!isNaN(dt)&&dt.toDateString()===today.toDateString())activeDay=i;});
-    renderBanner();renderDayNav();renderDayContent();
-    if(currentView!=='day')setView(currentView);
+  if (weeklyOk) {
+    document.getElementById('week-range').textContent =
+      (parsed.weekStart && parsed.weekEnd) ? parsed.weekStart + ' – ' + parsed.weekEnd : '';
+    const today = new Date();
+    activeDay = 0;
+    parsed.dates.forEach((d, i) => {
+      const dt = new Date(d);
+      if (!isNaN(dt) && dt.toDateString() === today.toDateString()) activeDay = i;
+    });
+    renderBanner();
+    renderDayNav();
+    renderDayContent();
+    if (currentView !== 'day') setView(currentView);
   }
 }
 
-function renderBanner(){
-  const el=document.getElementById('banner-items');
-  if(!calMonths.length){el.innerHTML=`<span style="font-size:12px;color:var(--pink-text);">No calendar data loaded.</span>`;return;}
-  const today=new Date(),items=[];
-  calMonths.forEach(m=>{
-    Object.entries(m.events).forEach(([ds,evts])=>{
-      const diff=Math.round((new Date(m.year,m.month,+ds)-today)/86400000);
-      if(diff>=0&&diff<=7)evts.forEach(e=>items.push({diff,day:diff===0?'Today':diff===1?'Tomorrow':`In ${diff}d`,label:e.l,type:e.t}));
+function renderBanner() {
+  const el = document.getElementById('banner-items');
+  if (!calMonths.length) { el.innerHTML = `<span style="font-size:12px;color:var(--pink-text);">No calendar data.</span>`; return; }
+  const today = new Date(), items = [];
+  calMonths.forEach(m => {
+    Object.entries(m.events).forEach(([ds, evts]) => {
+      const diff = Math.round((new Date(m.year, m.month, +ds) - today) / 86400000);
+      if (diff >= 0 && diff <= 7) evts.forEach(e => items.push({diff, day: diff===0?'Today':diff===1?'Tomorrow':`In ${diff}d`, label:e.l, type:e.t}));
     });
   });
-  items.sort((a,b)=>a.diff-b.diff);
-  el.innerHTML=items.length
-    ?items.slice(0,6).map(i=>`<div class="banner-item"><div class="banner-dot bd-${i.type}"></div><span class="banner-when">${i.day}</span><span>${esc(i.label)}</span></div>`).join('')
-    :`<span style="font-size:12px;color:var(--pink-text);">Nothing in the next 7 days.</span>`;
+  items.sort((a,b) => a.diff - b.diff);
+  el.innerHTML = items.length
+    ? items.slice(0,6).map(i => `<div class="banner-item"><div class="banner-dot bd-${i.type}"></div><span class="banner-when">${i.day}</span><span>${esc(i.label)}</span></div>`).join('')
+    : `<span style="font-size:12px;color:var(--pink-text);">Nothing in the next 7 days.</span>`;
 }
 
-const VIEWS=['day','dinner','habits','cleaning','todo','calendar','notes'];
-function setView(v){
-  currentView=v;
-  VIEWS.forEach(x=>document.getElementById('view-'+x).style.display=x===v?'block':'none');
-  document.querySelectorAll('.ntab').forEach((b,i)=>b.classList.toggle('active',VIEWS[i]===v));
-  if(v==='dinner')renderDinner();
-  if(v==='habits')renderHabits();
-  if(v==='cleaning')renderCleaning();
-  if(v==='todo')renderTodo();
-  if(v==='calendar')renderCalendar();
-  if(v==='notes')renderNotes();
+const VIEWS = ['day','dinner','habits','cleaning','todo','calendar','notes'];
+function setView(v) {
+  currentView = v;
+  VIEWS.forEach(x => document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none');
+  document.querySelectorAll('.ntab').forEach((b,i) => b.classList.toggle('active', VIEWS[i]===v));
+  if (v==='dinner') renderDinner();
+  if (v==='habits') renderHabits();
+  if (v==='cleaning') renderCleaning();
+  if (v==='todo') renderTodo();
+  if (v==='calendar') renderCalendar();
+  if (v==='notes') renderNotes();
 }
 
-function renderDayNav(){
-  if(!parsed)return;
-  document.getElementById('day-nav').innerHTML=DAY_NAMES.map((d,i)=>`
+function renderDayNav() {
+  if (!parsed) return;
+  document.getElementById('day-nav').innerHTML = DAY_NAMES.map((d,i) => `
     <button class="day-btn${i===activeDay?' active':''}" onclick="setDay(${i})">
       <span class="dname">${SHORT[i]}</span>
       <span class="ddate">${esc(parsed.dates[i]||'')}</span>
     </button>`).join('');
 }
-function setDay(i){activeDay=i;renderDayNav();renderDayContent();}
+function setDay(i) { activeDay=i; renderDayNav(); renderDayContent(); }
 
-function renderDayContent(){
-  if(!parsed){document.getElementById('day-content').innerHTML='<div class="loading">Loading...</div>';return;}
-  const i=activeDay,wk=getWK();let h='';
-  if(parsed.focus[i])h+=`<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
-  if(parsed.events[i]&&parsed.events[i].length){
-    h+=`<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
-    parsed.events[i].forEach(ev=>{
-      const t=ev.start?`${ev.start}${ev.end?' – '+ev.end:''}`:'';
-      h+=`<div class="event-row"><div class="event-dot"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
+function renderDayContent() {
+  if (!parsed) { document.getElementById('day-content').innerHTML='<div class="loading">Loading...</div>'; return; }
+  const i = activeDay, wk = getWK(); let h = '';
+  if (parsed.focus[i])
+    h += `<div class="section"><div class="st st-pink">Today's focus</div><div class="card-block card-pink"><div class="focus-text">${esc(parsed.focus[i])}</div></div></div>`;
+  if (parsed.events[i] && parsed.events[i].length) {
+    h += `<div class="section"><div class="st st-blue">Events</div><div class="card-block card-blue">`;
+    parsed.events[i].forEach(ev => {
+      const t = ev.start ? `${ev.start}${ev.end?' – '+ev.end:''}` : '';
+      h += `<div class="event-row"><div class="event-dot"></div><span class="event-name">${esc(ev.name)}</span><span class="event-time">${t}</span></div>`;
     });
-    h+=`</div></div>`;
+    h += `</div></div>`;
   }
-  const dinVal=(dinnerEdits[wk]&&dinnerEdits[wk][i]!=null)?dinnerEdits[wk][i]:parsed.dinner[i];
-  if(dinVal)h+=`<div class="section"><div class="st st-orange">Dinner</div><div class="card-block card-orange"><div class="dinner-preview"><span style="font-size:14px;">🍽</span><span class="dinner-text">${esc(dinVal)}</span></div></div></div>`;
-  if(parsed.tasks[i]&&parsed.tasks[i].length){
-    const td=(taskDone[wk]&&taskDone[wk][i])||{};
-    const total=parsed.tasks[i].length;
-    const done=parsed.tasks[i].filter((t,j)=>td[j]!=null?td[j]:t.done).length;
-    const pct=Math.round(done/total*100);
-    h+=`<div class="section"><div class="st st-pink">Tasks</div>
+  const dinVal = (dinnerEdits[wk] && dinnerEdits[wk][i] != null) ? dinnerEdits[wk][i] : parsed.dinner[i];
+  if (dinVal)
+    h += `<div class="section"><div class="st st-orange">Dinner</div><div class="card-block card-orange"><div class="dinner-preview"><span style="font-size:14px;">🍽</span><span class="dinner-text">${esc(dinVal)}</span></div></div></div>`;
+  if (parsed.tasks[i] && parsed.tasks[i].length) {
+    const td = (taskDone[wk] && taskDone[wk][i]) || {};
+    const total = parsed.tasks[i].length;
+    const done = parsed.tasks[i].filter((t,j) => td[j]!=null ? td[j] : t.done).length;
+    const pct = Math.round(done/total*100);
+    h += `<div class="section"><div class="st st-pink">Tasks</div>
     <div class="prog-label">${done} of ${total} done</div>
     <div class="prog-bar" style="background:var(--pink-bg);"><div class="prog-fill" style="width:${pct}%;background:var(--pink);"></div></div>
     <div class="card-block card-pink">`;
-    parsed.tasks[i].forEach((t,j)=>{
-      const isDone=td[j]!=null?td[j]:t.done;
-      h+=`<div class="task-row${isDone?' done':''}" onclick="toggleTask(${i},${j})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
+    parsed.tasks[i].forEach((t,j) => {
+      const isDone = td[j]!=null ? td[j] : t.done;
+      h += `<div class="task-row${isDone?' done':''}" onclick="toggleTask(${i},${j})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
     });
-    h+=`</div></div>`;
+    h += `</div></div>`;
   }
-  if(!parsed.focus[i]&&(!parsed.events[i]||!parsed.events[i].length)&&!dinVal&&(!parsed.tasks[i]||!parsed.tasks[i].length))
-    h+=`<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
-  document.getElementById('day-content').innerHTML=h;
+  if (!parsed.focus[i] && (!parsed.events[i]||!parsed.events[i].length) && !dinVal && (!parsed.tasks[i]||!parsed.tasks[i].length))
+    h += `<div style="padding:2rem;text-align:center;font-size:13px;color:var(--muted);">Nothing planned for ${DAY_NAMES[i]}.</div>`;
+  document.getElementById('day-content').innerHTML = h;
 }
-function toggleTask(d,t){
-  const wk=getWK();if(!taskDone[wk])taskDone[wk]={};if(!taskDone[wk][d])taskDone[wk][d]={};
-  const cur=taskDone[wk][d][t]!=null?taskDone[wk][d][t]:(parsed.tasks[d][t]&&parsed.tasks[d][t].done);
-  taskDone[wk][d][t]=!cur;saveState();renderDayContent();
+function toggleTask(d,t) {
+  const wk = getWK();
+  if (!taskDone[wk]) taskDone[wk] = {};
+  if (!taskDone[wk][d]) taskDone[wk][d] = {};
+  const cur = taskDone[wk][d][t]!=null ? taskDone[wk][d][t] : (parsed.tasks[d][t] && parsed.tasks[d][t].done);
+  taskDone[wk][d][t] = !cur;
+  saveState(); renderDayContent();
 }
 
-function renderDinner(){
-  if(!parsed){document.getElementById('view-dinner').innerHTML='<div class="loading">Loading...</div>';return;}
-  const wk=getWK();
-  let h=`<div class="section"><div class="st st-orange">This week's dinners</div><div class="card-block card-orange">`;
-  DAY_NAMES.forEach((day,i)=>{
-    const val=(dinnerEdits[wk]&&dinnerEdits[wk][i]!=null)?dinnerEdits[wk][i]:parsed.dinner[i];
-    const isT=i===activeDay;
-    h+=`<div class="dinner-plan-row"><span class="dp-day${isT?' today':''}">${SHORT[i]}</span>
+function renderDinner() {
+  if (!parsed) { document.getElementById('view-dinner').innerHTML='<div class="loading">Loading...</div>'; return; }
+  const wk = getWK();
+  let h = `<div class="section"><div class="st st-orange">This week's dinners</div><div class="card-block card-orange">`;
+  DAY_NAMES.forEach((day,i) => {
+    const val = (dinnerEdits[wk] && dinnerEdits[wk][i]!=null) ? dinnerEdits[wk][i] : parsed.dinner[i];
+    const isT = i === activeDay;
+    h += `<div class="dinner-plan-row"><span class="dp-day${isT?' today':''}">${SHORT[i]}</span>
     <input class="dp-input" id="dp-${i}" type="text" placeholder="What's for dinner?" value="${esc(val||'')}" oninput="saveDinner(${i},this.value)">
     <span class="dp-saved" id="dps-${i}">✓</span></div>`;
   });
-  h+=`</div></div><p style="font-size:11px;color:var(--muted);">Edits save locally. Hit ↻ Sync to reload from sheet.</p>`;
-  document.getElementById('view-dinner').innerHTML=h;
+  h += `</div></div><p style="font-size:11px;color:var(--muted);">Edits save locally. Hit ↻ Sync to reload from sheet.</p>`;
+  document.getElementById('view-dinner').innerHTML = h;
 }
-function saveDinner(i,val){
-  const wk=getWK();if(!dinnerEdits[wk])dinnerEdits[wk]={};dinnerEdits[wk][i]=val;saveState();
-  const s=document.getElementById('dps-'+i);if(s){s.classList.add('show');setTimeout(()=>s.classList.remove('show'),1500);}
+function saveDinner(i,val) {
+  const wk = getWK();
+  if (!dinnerEdits[wk]) dinnerEdits[wk] = {};
+  dinnerEdits[wk][i] = val; saveState();
+  const s = document.getElementById('dps-'+i);
+  if (s) { s.classList.add('show'); setTimeout(() => s.classList.remove('show'), 1500); }
 }
 
-function renderHabits(){
-  if(!parsed||!parsed.habits.length){document.getElementById('view-habits').innerHTML='<div class="loading">No habit data.</div>';return;}
-  let h=`<div class="section"><div class="st st-green">Weekly habits</div><div class="card-block card-green">`;
-  parsed.habits.forEach(hb=>{
-    h+=`<div class="habit-row"><span class="habit-name">${esc(hb.name)}</span><div class="dots">`;
-    hb.days.forEach((d,i)=>h+=`<div class="dot ${d?'dot-on-green':'dot-off-green'}" title="${SHORT[i]}"></div>`);
-    h+=`</div></div>`;
+function renderHabits() {
+  if (!parsed || !parsed.habits.length) { document.getElementById('view-habits').innerHTML='<div class="loading">No habit data.</div>'; return; }
+  let h = `<div class="section"><div class="st st-green">Weekly habits</div><div class="card-block card-green">`;
+  parsed.habits.forEach(hb => {
+    h += `<div class="habit-row"><span class="habit-name">${esc(hb.name)}</span><div class="dots">`;
+    hb.days.forEach((d,i) => h += `<div class="dot ${d?'dot-on-green':'dot-off-green'}" title="${SHORT[i]}"></div>`);
+    h += `</div></div>`;
   });
-  h+=`</div></div>`;
-  if(parsed.habitPct&&parsed.habitPct.length){
-    h+=`<div class="section"><div class="st st-green">Daily completion</div><div class="card-block card-green">`;
-    DAY_NAMES.forEach((d,i)=>h+=`<div class="habit-row"><span class="habit-name">${d}</span><span class="pct-badge">${parsed.habitPct[i]||0}%</span></div>`);
-    h+=`</div></div>`;
+  h += `</div></div>`;
+  if (parsed.habitPct && parsed.habitPct.length) {
+    h += `<div class="section"><div class="st st-green">Daily completion</div><div class="card-block card-green">`;
+    DAY_NAMES.forEach((d,i) => h += `<div class="habit-row"><span class="habit-name">${d}</span><span class="pct-badge">${parsed.habitPct[i]||0}%</span></div>`);
+    h += `</div></div>`;
   }
-  document.getElementById('view-habits').innerHTML=h;
+  document.getElementById('view-habits').innerHTML = h;
 }
 
-function renderCleaning(){
-  if(!parsed||!parsed.cleaning.length){document.getElementById('view-cleaning').innerHTML='<div class="loading">No cleaning data.</div>';return;}
-  let h=`<div class="section"><div class="st st-teal">Cleaning schedule</div>
+function renderCleaning() {
+  if (!parsed || !parsed.cleaning.length) { document.getElementById('view-cleaning').innerHTML='<div class="loading">No cleaning data.</div>'; return; }
+  let h = `<div class="section"><div class="st st-teal">Cleaning schedule</div>
   <div style="display:flex;gap:5px;margin-bottom:8px;">
-    ${SHORT.map(s=>`<span style="font-size:10px;color:var(--teal-text);font-weight:500;min-width:13px;text-align:center;">${s[0]}</span>`).join('')}
+    ${SHORT.map(s => `<span style="font-size:10px;color:var(--teal-text);font-weight:500;min-width:13px;text-align:center;">${s[0]}</span>`).join('')}
   </div><div class="card-block card-teal">`;
-  parsed.cleaning.forEach(c=>{
-    h+=`<div class="clean-row"><span class="clean-name">${esc(c.name)}</span><div class="dots">`;
-    c.days.forEach(d=>h+=`<div class="dot ${d?'dot-on-teal':'dot-off-teal'}"></div>`);
-    h+=`</div></div>`;
+  parsed.cleaning.forEach(c => {
+    h += `<div class="clean-row"><span class="clean-name">${esc(c.name)}</span><div class="dots">`;
+    c.days.forEach(d => h += `<div class="dot ${d?'dot-on-teal':'dot-off-teal'}"></div>`);
+    h += `</div></div>`;
   });
-  h+=`</div></div>`;
-  document.getElementById('view-cleaning').innerHTML=h;
+  h += `</div></div>`;
+  document.getElementById('view-cleaning').innerHTML = h;
 }
 
-function renderTodo(){
-  if(!parsed||!parsed.todos.length){document.getElementById('view-todo').innerHTML='<div class="loading">No to-do data.</div>';return;}
-  const wk=getWK(),ts=todoState[wk]||{};
-  const done=parsed.todos.filter((t,i)=>ts[i]!=null?ts[i]:t.done).length;
-  const total=parsed.todos.length,pct=Math.round(done/total*100);
-  let h=`<div class="section">
+function renderTodo() {
+  if (!parsed || !parsed.todos.length) { document.getElementById('view-todo').innerHTML='<div class="loading">No to-do data.</div>'; return; }
+  const wk = getWK(), ts = todoState[wk] || {};
+  const done = parsed.todos.filter((t,i) => ts[i]!=null ? ts[i] : t.done).length;
+  const total = parsed.todos.length, pct = Math.round(done/total*100);
+  let h = `<div class="section">
     <div class="prog-label">${done} of ${total} complete (${pct}%)</div>
     <div class="prog-bar" style="background:var(--blue-bg);"><div class="prog-fill" style="width:${pct}%;background:var(--blue);"></div></div>
     <div class="card-block card-blue" style="margin-top:8px;">`;
-  parsed.todos.forEach((t,i)=>{
-    const isDone=ts[i]!=null?ts[i]:t.done;
-    h+=`<div class="todo-row${isDone?' done':''}" onclick="toggleTodo(${i})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
+  parsed.todos.forEach((t,i) => {
+    const isDone = ts[i]!=null ? ts[i] : t.done;
+    h += `<div class="todo-row${isDone?' done':''}" onclick="toggleTodo(${i})"><div class="cb"><div class="ck"></div></div><span class="tname">${esc(t.name)}</span></div>`;
   });
-  h+=`</div></div>`;
-  document.getElementById('view-todo').innerHTML=h;
+  h += `</div></div>`;
+  document.getElementById('view-todo').innerHTML = h;
 }
-function toggleTodo(i){
-  const wk=getWK();if(!todoState[wk])todoState[wk]={};
-  const cur=todoState[wk][i]!=null?todoState[wk][i]:parsed.todos[i].done;
-  todoState[wk][i]=!cur;saveState();renderTodo();
+function toggleTodo(i) {
+  const wk = getWK();
+  if (!todoState[wk]) todoState[wk] = {};
+  const cur = todoState[wk][i]!=null ? todoState[wk][i] : parsed.todos[i].done;
+  todoState[wk][i] = !cur; saveState(); renderTodo();
 }
 
-function renderCalendar(){
-  const el=document.getElementById('view-calendar');
-  if(!calMonths.length){el.innerHTML='<div class="loading">No calendar data. Make sure the monthly tab is also shared and hit ↻ Sync.</div>';return;}
-  const m=calMonths[Math.min(calIdx,calMonths.length-1)];
-  let h=`<div class="month-nav">
+function renderCalendar() {
+  const el = document.getElementById('view-calendar');
+  if (!calMonths.length) { el.innerHTML='<div class="loading">No calendar data.</div>'; return; }
+  const m = calMonths[Math.min(calIdx, calMonths.length-1)];
+  let h = `<div class="month-nav">
     <button class="month-nav-btn" onclick="prevMonth()">← Prev</button>
     <span class="month-title">${m.name}</span>
     <button class="month-nav-btn" onclick="nextMonth()">Next →</button>
@@ -530,34 +614,34 @@ function renderCalendar(){
     <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:var(--pink-bg);color:var(--pink-text);font-weight:500;">Ander</span>
   </div>
   <div class="cal-grid">`;
-  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>h+=`<div class="cal-head">${d}</div>`);
-  for(let i=0;i<m.firstDayOfWeek;i++)h+=`<div class="cal-cell empty"></div>`;
-  for(let d=1;d<=m.days;d++){
-    const isT=d===m.todayDay,evts=m.events[d]||[];
-    h+=`<div class="cal-cell${isT?' today-cell':''}"><div class="cal-num">${d}</div>`;
-    evts.slice(0,3).forEach(e=>h+=`<div class="cal-evt ${e.t}">${esc(e.l)}</div>`);
-    if(evts.length>3)h+=`<div class="cal-evt other">+${evts.length-3} meer</div>`;
-    h+=`</div>`;
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => h += `<div class="cal-head">${d}</div>`);
+  for (let i = 0; i < m.firstDayOfWeek; i++) h += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= m.days; d++) {
+    const isT = d===m.todayDay, evts = m.events[d]||[];
+    h += `<div class="cal-cell${isT?' today-cell':''}"><div class="cal-num">${d}</div>`;
+    evts.slice(0,3).forEach(e => h += `<div class="cal-evt ${e.t}">${esc(e.l)}</div>`);
+    if (evts.length > 3) h += `<div class="cal-evt other">+${evts.length-3} meer</div>`;
+    h += `</div>`;
   }
-  const rem=(m.firstDayOfWeek+m.days)%7;
-  if(rem)for(let i=0;i<7-rem;i++)h+=`<div class="cal-cell empty"></div>`;
-  h+=`</div>`;
-  el.innerHTML=h;
+  const rem = (m.firstDayOfWeek + m.days) % 7;
+  if (rem) for (let i = 0; i < 7-rem; i++) h += `<div class="cal-cell empty"></div>`;
+  h += `</div>`;
+  el.innerHTML = h;
 }
-function prevMonth(){if(calIdx>0){calIdx--;renderCalendar();}}
-function nextMonth(){if(calIdx<calMonths.length-1){calIdx++;renderCalendar();}}
+function prevMonth() { if (calIdx>0) { calIdx--; renderCalendar(); } }
+function nextMonth() { if (calIdx<calMonths.length-1) { calIdx++; renderCalendar(); } }
 
-function renderNotes(){
-  let n='';try{n=localStorage.getItem('wp_notes4')||'';}catch(e){}
-  document.getElementById('view-notes').innerHTML=`
+function renderNotes() {
+  let n = ''; try { n = localStorage.getItem('wp_notes6') || ''; } catch(e) {}
+  document.getElementById('view-notes').innerHTML = `
     <div class="section"><div class="st st-pink">Weekly notes</div>
       <textarea class="notes-area" id="notes-ta" placeholder="Jot down anything for this week...">${esc(n)}</textarea>
       <div class="notes-saved" id="notes-saved"></div>
     </div>`;
-  document.getElementById('notes-ta').addEventListener('input',function(){
-    try{localStorage.setItem('wp_notes4',this.value);}catch(e){}
-    const s=document.getElementById('notes-saved');
-    s.textContent='✓ Saved';setTimeout(()=>{s.textContent='';},2000);
+  document.getElementById('notes-ta').addEventListener('input', function() {
+    try { localStorage.setItem('wp_notes6', this.value); } catch(e) {}
+    const s = document.getElementById('notes-saved');
+    s.textContent = '✓ Saved'; setTimeout(() => { s.textContent = ''; }, 2000);
   });
 }
 
