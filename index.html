@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Weekly Planner</title>
+<title>StickyPaper Weekly Planner</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#D4537E">
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
@@ -38,9 +38,9 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 .user-avatar{width:30px;height:30px;border-radius:50%;cursor:pointer;border:2px solid var(--pink);}
 .signout-btn{font-size:11px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;}
 /* ── Calendar bar ── */
-.cal-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--purple-bg);border:1.5px solid var(--purple);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:1rem;flex-wrap:wrap;}
-.cal-bar .cal-status{font-size:12px;color:var(--purple-text);}
-.cal-signin-btn{font-size:12px;padding:6px 16px;border-radius:var(--radius);background:var(--purple);color:#fff;font-weight:500;cursor:pointer;border:none;}
+.cal-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--pink-bg);border:1.5px solid var(--pink);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:1rem;flex-wrap:wrap;}
+.cal-bar .cal-status{font-size:12px;color:var(--pink-text);}
+.cal-signin-btn{font-size:12px;padding:6px 16px;border-radius:var(--radius);background:var(--pink);color:#fff;font-weight:500;cursor:pointer;border:none;}
 .cal-signout-btn{font-size:11px;color:var(--muted);text-decoration:underline;cursor:pointer;background:none;border:none;}
 /* ── Upcoming banner ── */
 .upcoming-banner{background:var(--pink-bg);border:1.5px solid var(--pink);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:1rem;cursor:pointer;}
@@ -163,7 +163,7 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 
 <!-- AUTH SCREEN -->
 <div id="auth-screen" class="auth-screen" style="display:none">
-  <h1>Weekly Planner</h1>
+  <h1>StickyPaper Weekly Planner</h1>
   <p>Your personal family planner. Sign in with Google to get started — your data syncs across all your devices.</p>
   <button class="google-btn" id="google-signin-btn">
     <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
@@ -175,7 +175,7 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
 <!-- MAIN APP -->
 <div class="app" id="main-app" style="display:none">
   <div class="top-header">
-    <h1>Weekly Planner</h1>
+    <h1>StickyPaper Weekly Planner</h1>
     <div class="header-right">
       <span class="week-range" id="week-range"></span>
       <span id="sync-status" style="font-size:11px;color:var(--muted)"></span>
@@ -518,14 +518,20 @@ function renderBanner(){
   for(let i=0;i<=7;i++){
     const d=new Date(today);d.setDate(d.getDate()+i);
     eventsOnDate(d).forEach(ev=>{
-      items.push({diff:i,day:i===0?'Today':i===1?'Tomorrow':'In '+i+'d',ev});
+      const dayLabel=(()=>{
+        if(i===0)return'Today';
+        if(i===1)return'Tomorrow';
+        const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        return dn[d.getDay()]+' '+d.getDate();
+      })();
+      items.push({diff:i,day:dayLabel,ev});
     });
   }
   el.innerHTML=items.length
     ?items.map(it=>{
         const ps=personStyle(it.ev.person);
         const tag=it.ev.person?`<span class="event-person" style="background:${ps.bg};color:${ps.text}">${esc(it.ev.person)}</span>`:'';
-        return`<div class="banner-item"><div class="banner-dot" style="background:${ps.dot}"></div><span class="banner-when">${it.day}</span>${tag}<span>${esc(it.ev.name)}${it.ev.allDay?'':' · '+fmtTime(it.ev.start,false)}</span></div>`;
+        return`<div class="banner-item"><div class="banner-dot" style="background:${ps.dot}"></div><span class="banner-when">${it.day}</span>${tag}<span>${esc(it.ev.name)}</span></div>`;
       }).join('')
     :'<span style="font-size:12px;color:var(--pink-text);">No upcoming events in the next 7 days.</span>';
 }
@@ -574,7 +580,7 @@ function renderDayContent(){
     dayEvents.forEach(ev=>{
       const ps=personStyle(ev.person);
       const tag=ev.person?`<span class="event-person" style="background:${ps.bg};color:${ps.text}">${esc(ev.person)}</span>`:'';
-      h+=`<div class="event-row"><div class="event-dot" style="background:${ps.dot}"></div>${tag}<span class="event-name">${esc(ev.name)}</span><span class="event-time">${ev.allDay?'All day':fmtTime(ev.start,false)}</span></div>`;
+      h+=`<div class="event-row"><div class="event-dot" style="background:${ps.dot}"></div>${tag}<span class="event-name">${esc(ev.name)}</span></div>`;
     });
     h+=`</div></div>`;
   }else if(calToken){
@@ -705,7 +711,7 @@ function renderMonthDayPanel(){
   const label=selectedMonthDate.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});
   let h=`<div class="st st-purple">${esc(label)}</div><div class="card-block card-purple">`;
   if(!evts.length){h+='<div class="empty-msg">No events this day.</div>';}
-  else{evts.forEach(ev=>{const ps=personStyle(ev.person);const tag=ev.person?`<span class="event-person" style="background:${ps.bg};color:${ps.text}">${esc(ev.person)}</span>`:'';h+=`<div class="event-row"><div class="event-dot" style="background:${ps.dot}"></div>${tag}<span class="event-name">${esc(ev.name)}</span><span class="event-time">${ev.allDay?'All day':fmtTime(ev.start,false)}</span></div>`;});}
+  else{evts.forEach(ev=>{const ps=personStyle(ev.person);const tag=ev.person?`<span class="event-person" style="background:${ps.bg};color:${ps.text}">${esc(ev.person)}</span>`:'';h+=`<div class="event-row"><div class="event-dot" style="background:${ps.dot}"></div>${tag}<span class="event-name">${esc(ev.name)}</span></div>`;});}
   h+='</div>';
   panel.innerHTML=h;
 }
