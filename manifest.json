@@ -1,0 +1,12 @@
+{
+  "name": "Weekly Planner",
+  "short_name": "Planner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f8f6",
+  "theme_color": "#D4537E",
+  "icons": [
+    {"src": "https://via.placeholder.com/192x192/D4537E/ffffff?text=P", "sizes": "192x192", "type": "image/png"},
+    {"src": "https://via.placeholder.com/512x512/D4537E/ffffff?text=P", "sizes": "512x512", "type": "image/png"}
+  ]
+}
