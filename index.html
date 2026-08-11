@@ -375,8 +375,13 @@ function showApp(user){
 // ════════════════════════════════════════
 function tryAutoCalendar(user){
   const stored=sessionStorage.getItem('cal_token');
-  if(stored){calToken=stored;fetchCalendarEvents();}
-  else{refreshCalendarUI();}
+  if(stored){
+    calToken=stored;
+    fetchCalendarEvents();
+  } else {
+    // Try to get token silently by re-signing in with Google in background
+    refreshCalendarUI();
+  }
 }
 
 function refreshCalendarUI(){
@@ -395,16 +400,24 @@ function refreshCalendarUI(){
 }
 
 document.getElementById('cal-signin-btn').addEventListener('click', async ()=>{
+  document.getElementById('cal-status').textContent='Connecting…';
+  document.getElementById('cal-signin-btn').style.display='none';
   try{
-    const result = await signInWithPopup(auth, provider);
+    const calProvider = new GoogleAuthProvider();
+    calProvider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+    const result = await signInWithPopup(auth, calProvider);
     const cred = GoogleAuthProvider.credentialFromResult(result);
     if(cred && cred.accessToken){
       calToken=cred.accessToken;
       sessionStorage.setItem('cal_token', calToken);
       fetchCalendarEvents();
+    } else {
+      document.getElementById('cal-status').textContent='Could not get calendar access. Try again.';
+      document.getElementById('cal-signin-btn').style.display='inline';
     }
   }catch(e){
-    document.getElementById('cal-status').textContent='Could not connect calendar: '+e.message;
+    document.getElementById('cal-status').textContent='Could not connect: '+e.message;
+    document.getElementById('cal-signin-btn').style.display='inline';
   }
 });
 
@@ -449,8 +462,10 @@ async function fetchCalendarEvents(){
       const {person,name}=parsePersonTag(ev.summary||'(untitled)');
       return{start,end,allDay,person,name};
     });
+    console.log('Calendar loaded: '+calEvents.length+' events');
     refreshCalendarUI();
-    renderBanner();renderDayContent();
+    renderBanner();
+    renderDayContent();
     if(currentView==='month')renderMonth();
   }catch(err){
     document.getElementById('cal-status').textContent='Could not load calendar. Try reconnecting.';
@@ -526,6 +541,10 @@ function renderBanner(){
       })();
       items.push({diff:i,day:dayLabel,ev});
     });
+  }
+  if(calEvents.length===0 && calToken){
+    el.innerHTML='<span style="font-size:12px;color:var(--pink-text);">Loading calendar events…</span>';
+    return;
   }
   el.innerHTML=items.length
     ?items.map(it=>{
