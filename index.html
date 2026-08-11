@@ -374,22 +374,28 @@ function showApp(user){
 //  GOOGLE CALENDAR (uses token from sign-in)
 // ════════════════════════════════════════
 function tryAutoCalendar(user){
+  // Always show connect button on page load - tokens expire in ~1hr
+  // If we have a stored token, try it, but show connect button if it fails
   const stored=sessionStorage.getItem('cal_token');
   if(stored){
     calToken=stored;
-    fetchCalendarEvents();
+    fetchCalendarEvents(); // will clear token and show connect btn if expired
   } else {
-    // Try to get token silently by re-signing in with Google in background
-    refreshCalendarUI();
+    calToken=null;
+    refreshCalendarUI(false);
   }
 }
 
-function refreshCalendarUI(){
+function refreshCalendarUI(loaded){
   const statusEl=document.getElementById('cal-status');
   const signinBtn=document.getElementById('cal-signin-btn');
   const signoutBtn=document.getElementById('cal-signout-btn');
-  if(calToken){
-    statusEl.textContent='✓ Google Calendar connected';
+  if(calToken && loaded){
+    statusEl.textContent='✓ Google Calendar connected — '+calEvents.length+' events loaded';
+    signinBtn.style.display='none';
+    signoutBtn.style.display='inline';
+  }else if(calToken && !loaded){
+    statusEl.textContent='Loading calendar…';
     signinBtn.style.display='none';
     signoutBtn.style.display='inline';
   }else{
@@ -424,7 +430,7 @@ document.getElementById('cal-signin-btn').addEventListener('click', async ()=>{
 document.getElementById('cal-signout-btn').addEventListener('click', ()=>{
   calToken=null;calEvents=[];
   sessionStorage.removeItem('cal_token');
-  refreshCalendarUI();renderBanner();renderDayContent();
+  refreshCalendarUI(false);renderBanner();renderDayContent();
   if(currentView==='month')renderMonth();
 });
 
@@ -447,12 +453,15 @@ async function fetchCalendarEvents(){
     );
     if(res.status===401){
       calToken=null;sessionStorage.removeItem('cal_token');
-      document.getElementById('cal-status').textContent='Session expired — click "Connect Calendar" to reconnect.';
-      refreshCalendarUI();return;
+      refreshCalendarUI(false);
+      renderBanner();
+      return;
     }
     if(!res.ok){
-      document.getElementById('cal-status').textContent='Could not load calendar ('+res.status+')';
-      refreshCalendarUI();return;
+      calToken=null;sessionStorage.removeItem('cal_token');
+      refreshCalendarUI(false);
+      renderBanner();
+      return;
     }
     const data=await res.json();
     calEvents=(data.items||[]).map(ev=>{
@@ -463,13 +472,14 @@ async function fetchCalendarEvents(){
       return{start,end,allDay,person,name};
     });
     console.log('Calendar loaded: '+calEvents.length+' events');
-    refreshCalendarUI();
+    refreshCalendarUI(true);
     renderBanner();
     renderDayContent();
     if(currentView==='month')renderMonth();
   }catch(err){
-    document.getElementById('cal-status').textContent='Could not load calendar. Try reconnecting.';
-    refreshCalendarUI();
+    calToken=null;sessionStorage.removeItem('cal_token');
+    refreshCalendarUI(false);
+    renderBanner();
   }
 }
 
@@ -525,7 +535,11 @@ function renderAll(){
 function renderBanner(){
   const el=document.getElementById('banner-items');
   if(!calToken){
-    el.innerHTML='<span style="font-size:12px;color:var(--pink-text)">Connect Google Calendar above to see what is coming up.</span>';
+    el.innerHTML='<span style="font-size:12px;color:var(--pink-text)">Click <b>Connect Calendar</b> in the bar above to see your upcoming events.</span>';
+    return;
+  }
+  if(calEvents.length===0){
+    el.innerHTML='<span style="font-size:12px;color:var(--pink-text);">Loading calendar events…</span>';
     return;
   }
   const today=new Date();today.setHours(0,0,0,0);
@@ -541,10 +555,6 @@ function renderBanner(){
       })();
       items.push({diff:i,day:dayLabel,ev});
     });
-  }
-  if(calEvents.length===0 && calToken){
-    el.innerHTML='<span style="font-size:12px;color:var(--pink-text);">Loading calendar events…</span>';
-    return;
   }
   el.innerHTML=items.length
     ?items.map(it=>{
