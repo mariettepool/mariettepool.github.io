@@ -232,6 +232,10 @@ const firebaseConfig = {
   appId: "1:1036703981049:web:09e93dcfa2804f717bb128"
 };
 
+// ── PASTE YOUR GOOGLE OAUTH CLIENT ID HERE ──
+// Found in Firebase Console → Authentication → Sign-in method → Google → Web client ID
+const GOOGLE_OAUTH_CLIENT_ID = "1036703981049-et7d7ubvo6s5bkndnccded0l4pbgqdag.apps.googleusercontent.com";
+
 // ── PERSON TAG COLOURS — users edit events in Google Calendar as [Name] Event ──
 const PERSON_COLORS = {
   'Emma':    {dot:'var(--blue)',   bg:'var(--blue-bg)',   text:'var(--blue-text)'},
@@ -374,15 +378,43 @@ function showApp(user){
 // ════════════════════════════════════════
 //  GOOGLE CALENDAR (uses token from sign-in)
 // ════════════════════════════════════════
+let tokenClient=null;
+
+function initTokenClient(){
+  if(typeof google==='undefined'||!google.accounts)return;
+  tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_OAUTH_CLIENT_ID,
+    scope:'https://www.googleapis.com/auth/calendar.readonly',
+    callback:(resp)=>{
+      if(resp.error){
+        refreshCalendarUI(false);
+        return;
+      }
+      calToken=resp.access_token;
+      if(currentUser)localStorage.setItem('cal_token_'+currentUser.uid, calToken);
+      fetchCalendarEvents();
+    }
+  });
+}
+
 function tryAutoCalendar(user){
-  const stored=localStorage.getItem('cal_token_'+user.uid);
-  if(stored){
-    calToken=stored;
-    fetchCalendarEvents();
-  } else {
-    calToken=null;
-    refreshCalendarUI(false);
-  }
+  // Wait for GIS to load then init token client
+  const tryInit=()=>{
+    if(typeof google!=='undefined'&&google.accounts){
+      initTokenClient();
+      const stored=localStorage.getItem('cal_token_'+user.uid);
+      if(stored){
+        calToken=stored;
+        fetchCalendarEvents();
+      } else {
+        calToken=null;
+        refreshCalendarUI(false);
+      }
+    } else {
+      setTimeout(tryInit, 300);
+    }
+  };
+  tryInit();
 }
 
 function refreshCalendarUI(loaded){
@@ -404,25 +436,23 @@ function refreshCalendarUI(loaded){
   }
 }
 
-document.getElementById('cal-signin-btn').addEventListener('click', async ()=>{
-  document.getElementById('cal-status').textContent='Connecting…';
-  document.getElementById('cal-signin-btn').style.display='none';
-  try{
+document.getElementById('cal-signin-btn').addEventListener('click', ()=>{
+  if(tokenClient){
+    tokenClient.requestAccessToken({prompt:'consent'});
+  } else {
+    // Fallback: try Firebase popup
     const calProvider = new GoogleAuthProvider();
     calProvider.addScope('https://www.googleapis.com/auth/calendar.readonly');
-    const result = await signInWithPopup(auth, calProvider);
-    const cred = GoogleAuthProvider.credentialFromResult(result);
-    if(cred && cred.accessToken){
-      calToken=cred.accessToken;
-      localStorage.setItem('cal_token_'+(currentUser?currentUser.uid:''), calToken);
-      fetchCalendarEvents();
-    } else {
-      document.getElementById('cal-status').textContent='Could not get calendar access. Try again.';
-      document.getElementById('cal-signin-btn').style.display='inline';
-    }
-  }catch(e){
-    document.getElementById('cal-status').textContent='Could not connect: '+e.message;
-    document.getElementById('cal-signin-btn').style.display='inline';
+    signInWithPopup(auth, calProvider).then(result=>{
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      if(cred && cred.accessToken){
+        calToken=cred.accessToken;
+        if(currentUser)localStorage.setItem('cal_token_'+currentUser.uid, calToken);
+        fetchCalendarEvents();
+      }
+    }).catch(e=>{
+      document.getElementById('cal-status').textContent='Could not connect: '+e.message;
+    });
   }
 });
 
