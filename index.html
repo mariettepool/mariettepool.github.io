@@ -342,7 +342,7 @@ document.getElementById('google-signin-btn').addEventListener('click', async ()=
     const cred = GoogleAuthProvider.credentialFromResult(result);
     if(cred && cred.accessToken){
       calToken=cred.accessToken;
-      sessionStorage.setItem('cal_token', calToken);
+      localStorage.setItem('cal_token_'+(currentUser?currentUser.uid:''), calToken);
     }
   }catch(e){
     document.getElementById('auth-loading').style.display='none';
@@ -354,7 +354,8 @@ document.getElementById('google-signin-btn').addEventListener('click', async ()=
 
 document.getElementById('signout-btn').addEventListener('click', async ()=>{
   calToken=null;calEvents=[];
-  sessionStorage.removeItem('cal_token');
+  if(currentUser)localStorage.removeItem('cal_token_'+currentUser.uid);
+  calToken=null;calEvents=[];
   await signOut(auth);
 });
 
@@ -374,12 +375,10 @@ function showApp(user){
 //  GOOGLE CALENDAR (uses token from sign-in)
 // ════════════════════════════════════════
 function tryAutoCalendar(user){
-  // Always show connect button on page load - tokens expire in ~1hr
-  // If we have a stored token, try it, but show connect button if it fails
-  const stored=sessionStorage.getItem('cal_token');
+  const stored=localStorage.getItem('cal_token_'+user.uid);
   if(stored){
     calToken=stored;
-    fetchCalendarEvents(); // will clear token and show connect btn if expired
+    fetchCalendarEvents();
   } else {
     calToken=null;
     refreshCalendarUI(false);
@@ -415,7 +414,7 @@ document.getElementById('cal-signin-btn').addEventListener('click', async ()=>{
     const cred = GoogleAuthProvider.credentialFromResult(result);
     if(cred && cred.accessToken){
       calToken=cred.accessToken;
-      sessionStorage.setItem('cal_token', calToken);
+      localStorage.setItem('cal_token_'+(currentUser?currentUser.uid:''), calToken);
       fetchCalendarEvents();
     } else {
       document.getElementById('cal-status').textContent='Could not get calendar access. Try again.';
@@ -429,7 +428,7 @@ document.getElementById('cal-signin-btn').addEventListener('click', async ()=>{
 
 document.getElementById('cal-signout-btn').addEventListener('click', ()=>{
   calToken=null;calEvents=[];
-  sessionStorage.removeItem('cal_token');
+  if(currentUser)localStorage.removeItem('cal_token_'+currentUser.uid);
   refreshCalendarUI(false);renderBanner();renderDayContent();
   if(currentView==='month')renderMonth();
 });
@@ -452,13 +451,13 @@ async function fetchCalendarEvents(){
       {headers:{Authorization:'Bearer '+calToken}}
     );
     if(res.status===401){
-      calToken=null;sessionStorage.removeItem('cal_token');
+      calToken=null;if(currentUser)localStorage.removeItem('cal_token_'+currentUser.uid);
       refreshCalendarUI(false);
       renderBanner();
       return;
     }
     if(!res.ok){
-      calToken=null;sessionStorage.removeItem('cal_token');
+      calToken=null;if(currentUser)localStorage.removeItem('cal_token_'+currentUser.uid);
       refreshCalendarUI(false);
       renderBanner();
       return;
@@ -477,7 +476,7 @@ async function fetchCalendarEvents(){
     renderDayContent();
     if(currentView==='month')renderMonth();
   }catch(err){
-    calToken=null;sessionStorage.removeItem('cal_token');
+    calToken=null;if(currentUser)localStorage.removeItem('cal_token_'+currentUser.uid);
     refreshCalendarUI(false);
     renderBanner();
   }
@@ -597,6 +596,7 @@ function renderDayNav(){
   document.getElementById('week-next').addEventListener('click',()=>{weekCursor.setDate(weekCursor.getDate()+7);updateWeekRange();renderDayNav();renderDayContent();});
 }
 window.setDay=function(i){activeDay=i;renderDayNav();renderDayContent();}
+window.setView=setView;
 
 function renderDayContent(){
   const i=activeDay,dt=dayDate(i),k=dkey(dt);let h='';
