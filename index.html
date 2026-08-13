@@ -214,6 +214,9 @@ body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f9f8f6;min-heigh
   <div id="view-notes"    style="display:none"></div>
 </div>
 
+<!-- Google Identity Services for Calendar OAuth -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <!-- Firebase SDKs -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -238,10 +241,10 @@ const GOOGLE_OAUTH_CLIENT_ID = "1036703981049-et7d7ubvo6s5bkndnccded0l4pbgqdag.a
 
 // ── PERSON TAG COLOURS — users edit events in Google Calendar as [Name] Event ──
 const PERSON_COLORS = {
-  'Emma':    {dot:'var(--blue)',   bg:'var(--blue-bg)',   text:'var(--blue-text)'},
-  'Liam':    {dot:'var(--green)',  bg:'var(--green-bg)',  text:'var(--green-text)'},
-  'Mom':     {dot:'var(--pink)',   bg:'var(--pink-bg)',   text:'var(--pink-text)'},
-  'Dad':     {dot:'var(--teal)',   bg:'var(--teal-bg)',   text:'var(--teal-text)'},
+  'Luke':    {dot:'var(--yellow)', bg:'var(--yellow-bg)', text:'var(--yellow-text)'},
+  'Riley':   {dot:'var(--blue)',   bg:'var(--blue-bg)',   text:'var(--blue-text)'},
+  'Kallie':  {dot:'var(--green)',  bg:'var(--green-bg)',  text:'var(--green-text)'},
+  'Marc':    {dot:'var(--orange)', bg:'var(--orange-bg)', text:'var(--orange-text)'},
   '_default':{dot:'var(--gray)',   bg:'var(--gray-bg)',   text:'var(--gray-text)'}
 };
 
@@ -381,12 +384,18 @@ function showApp(user){
 let tokenClient=null;
 
 function initTokenClient(){
-  if(typeof google==='undefined'||!google.accounts)return;
+  console.log('initTokenClient called, google available:', typeof google !== 'undefined');
+  if(typeof google==='undefined'||!google.accounts){
+    console.error('Google Identity Services not loaded');
+    return;
+  }
   tokenClient=google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_OAUTH_CLIENT_ID,
     scope:'https://www.googleapis.com/auth/calendar.readonly',
     callback:(resp)=>{
+      console.log('GIS token response:', JSON.stringify(resp));
       if(resp.error){
+        console.error('GIS error:', resp.error, resp.error_description);
         refreshCalendarUI(false);
         return;
       }
@@ -437,22 +446,12 @@ function refreshCalendarUI(loaded){
 }
 
 document.getElementById('cal-signin-btn').addEventListener('click', ()=>{
+  console.log('Connect Calendar clicked, tokenClient:', tokenClient);
   if(tokenClient){
-    tokenClient.requestAccessToken({prompt:'consent'});
+    tokenClient.requestAccessToken({prompt:'select_account'});
   } else {
-    // Fallback: try Firebase popup
-    const calProvider = new GoogleAuthProvider();
-    calProvider.addScope('https://www.googleapis.com/auth/calendar.readonly');
-    signInWithPopup(auth, calProvider).then(result=>{
-      const cred = GoogleAuthProvider.credentialFromResult(result);
-      if(cred && cred.accessToken){
-        calToken=cred.accessToken;
-        if(currentUser)localStorage.setItem('cal_token_'+currentUser.uid, calToken);
-        fetchCalendarEvents();
-      }
-    }).catch(e=>{
-      document.getElementById('cal-status').textContent='Could not connect: '+e.message;
-    });
+    console.error('tokenClient is null - GIS not initialised');
+    document.getElementById('cal-status').textContent='Error: Calendar not ready. Please refresh the page and try again.';
   }
 });
 
