@@ -717,10 +717,10 @@ function renderToday(){
     h+='</div>';
   }
   var tasks=tasksFor(dk,null),choresHTML="";
-  choresHTML+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"📝 Daily To-Do")+'</span>';
+  choresHTML+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"📋 Chores")+'</span>';
   if(activeP.role==="parent")choresHTML+='<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>';
   choresHTML+='</div><div class="card red">';
-  if(!tasks.length)choresHTML+='<div class="empty">'+(isK?"No chores today! 🎉":"No to-dos - tap + Add.")+'</div>';
+  if(!tasks.length)choresHTML+='<div class="empty">'+(isK?"No chores today! 🎉":"No chores - tap + Add.")+'</div>';
   else tasks.forEach(function(t){
     var done=isDone(t,dk);var ass=(t.assigneeIds||[]).map(function(id){return DATA.profiles.find(function(p){return p.id===id;});}).filter(Boolean);
     choresHTML+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span>';
@@ -729,7 +729,6 @@ function renderToday(){
     choresHTML+='</div>';
   });
   choresHTML+='</div>';
-  if(!isK)h+=choresHTML;
   var evts=evOn(dt),showE=isK?evts.filter(function(e){return e.isApp;}):evts;
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue);cursor:pointer" onclick="goPage(\'calendar\')" title="View monthly calendar">📅 Events today ›</span>';
   if(!isK)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openEventM(\''+dk+'\')">+ Add</button>';
@@ -770,7 +769,7 @@ function renderToday(){
     for(var gi=0;gi<8;gi++)h+='<div class="water-glass'+(gi<gl?" on":"")+'" onclick="togWater(\''+dk+'\','+(gi+1)+')">💧</div>';
     h+='</div></div>';
   }
-  if(isK)h+=choresHTML;
+  h+=choresHTML;
   h+=renderEarningChores(isK);
   pg.innerHTML=h;
 }
@@ -1029,8 +1028,8 @@ function openAddProfile(){editPid=null;pPhoto=null;ge("pm-title").textContent="A
 function openEditProfile(id){var p=(DATA.profiles||[]).find(function(x){return x.id===id;});if(!p)return;editPid=id;pPhoto=p.photo||null;ge("pm-title").textContent="Edit "+p.name;ge("pm-name").value=p.name;ge("pm-role").value=p.role||"child";ge("pm-pin").value=p.pin||"";ge("pm-delete").style.display="block";if(p.photo){ge("pm-photo-preview").innerHTML='<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';ge("pm-photo-preview").style.background="transparent";}else{ge("pm-photo-preview").innerHTML="📷";ge("pm-photo-preview").style.background="var(--charcoal-bg)";}ge("pm-colors").dataset.sel=p.color||PCOLS[0];bldPM();openModal("m-profile");}
 ge("pm-save").addEventListener("click",function(){
   var nm=ge("pm-name").value.trim();if(!nm)return;
-  var col=ge("pm-colors").dataset.sel||PCOLS[0],role=ge("pm-role").value,pin=ge("pm-pin").value.replace(/\D/g,"").slice(0,4),emoji=av(null);
-  var prof={name:nm,emoji:emoji,avatarIdx:avIdx,avatarSkin:avSkin,avatarHair:avHair,photo:pPhoto||null,color:col,role:role,pin:pin};
+  var col=ge("pm-colors").dataset.sel||PCOLS[0],role=ge("pm-role").value,pin=ge("pm-pin").value.replace(/\D/g,"").slice(0,4);
+  var prof={name:nm,photo:pPhoto||null,color:col,role:role,pin:pin};
   DATA.profiles=DATA.profiles||[];
   if(editPid){var idx=DATA.profiles.findIndex(function(x){return x.id===editPid;});if(idx>=0)DATA.profiles[idx]=Object.assign({},DATA.profiles[idx],prof);}
   else DATA.profiles.push(Object.assign({id:uid()},prof));
