@@ -1014,13 +1014,13 @@ function renderEarningChores(isKid){
   else vis.forEach(function(ec){
     var cp=ec.claimedBy?(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;}):null;
     var canClaim=isKid&&!ec.claimedBy&&!ec.approved;
-    h+='<div class="task-row" style="cursor:'+(canClaim?'pointer':'default')+'" '+(canClaim?'onclick="claimEC(''+ec.id+'')"':'')+'>'+
+    h+='<div class="task-row" style="cursor:'+(canClaim?'pointer':'default')+'" '+(canClaim?'onclick="claimEC(\''+ec.id+'\')"':'')+'>'+
       '<div class="tcheck'+(ec.approved?' done':ec.claimedBy?' done':'')+'" style="'+(ec.approved?'border-color:var(--green);background:var(--green)':ec.claimedBy?'border-color:var(--mustard);background:var(--mustard)':'')+'" ></div>'+
       '<div style="flex:1"><div class="ttext">'+esc(ec.desc)+'</div>'+
       '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+esc(ec.rewardType)+(ec.rewardDetail?' · '+esc(ec.rewardDetail):'')+
       (cp&&!ec.approved?' · Claimed by '+esc(cp.name)+' — awaiting approval':'')+(ec.approved?' · Approved ✓':'')+'</div></div>';
-    if(!isKid&&ec.claimedBy&&!ec.approved)h+='<button onclick="approveEC(''+ec.id+'')" style="padding:4px 10px;border-radius:var(--radius);border:none;background:var(--green);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Approve</button>';
-    if(!isKid)h+='<button class="del-btn" onclick="delEC(''+ec.id+'')">x</button>';
+    if(!isKid&&ec.claimedBy&&!ec.approved)h+='<button onclick="approveEC(\''+ec.id+'\')" style="padding:4px 10px;border-radius:var(--radius);border:none;background:var(--green);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Approve</button>';
+    if(!isKid)h+='<button class="del-btn" onclick="delEC(\''+ec.id+'\')">x</button>';
     h+='</div>';
   });
   return h+'</div>';
