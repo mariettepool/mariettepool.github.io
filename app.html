@@ -344,6 +344,14 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
   <button class="mdanger" id="pm-delete" style="display:none">Remove family member</button>
 </div></div>
 
+<div class="modal" id="m-earning"><div class="mbox">
+  <div class="mhandle"></div><div class="mtitle" id="ec-title">Add Earning Chore</div>
+  <div class="mf"><label class="ml">Chore description</label><input class="mi" id="ec-desc" type="text" placeholder="e.g. Clean out the garage"></div>
+  <div class="mf"><label class="ml">Reward</label><select class="msel" id="ec-reward-type"></select></div>
+  <div class="mf"><label class="ml">Reward detail</label><input class="mi" id="ec-reward-detail" type="text" placeholder="e.g. R20 or 1 hour extra"></div>
+  <div class="mbtns"><button class="mcancel" onclick="closeModal('m-earning')">Cancel</button><button class="msave" id="ec-save">Add</button></div>
+</div></div>
+
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 var FB_CFG={apiKey:"AIzaSyAfo1GRLp5keYakJlE9EsC5s4CvkiClTcw",authDomain:"sticky-planner.firebaseapp.com",projectId:"sticky-planner",storageBucket:"sticky-planner.firebasestorage.app",messagingSenderId:"1036703981049",appId:"1:1036703981049:web:09e93dcfa2804f717bb128"};
@@ -359,12 +367,19 @@ var LICONS=["📋","✅","🧹","🎉","⭐","🏃","📚","🐾","🎨","🏡",
 var LCOLS=["#E8000A","#F4B400","#2A9D5C","#2563EB","#7C3AED","#F97316","#EC4899","#0891B2"];
 var DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
-firebase.initializeApp(FB_CFG);
-var auth=firebase.auth();
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
-var db=firebase.firestore();
-var gProv=new firebase.auth.GoogleAuthProvider();
-gProv.addScope("https://www.googleapis.com/auth/calendar.readonly");
+var fbReady=false,auth=null,db=null,gProv=null;
+try{
+  if(typeof firebase==="undefined")throw new Error("firebase SDK did not load");
+  firebase.initializeApp(FB_CFG);
+  auth=firebase.auth();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
+  db=firebase.firestore();
+  gProv=new firebase.auth.GoogleAuthProvider();
+  gProv.addScope("https://www.googleapis.com/auth/calendar.readonly");
+  fbReady=true;
+}catch(fbErr){
+  console.error("Firebase failed to initialize:",fbErr);
+}
 
 var user=null,DATA=nd(),activeP=null,calEvts=[],calToken=null,tokenClient=null,unsub=null,saveT=null;
 var wCur=sow(new Date()),aDay=(new Date().getDay()+6)%7,aPage="today",moCur=new Date();
@@ -387,13 +402,14 @@ function ge(id){return document.getElementById(id);}
 function save(){
   clearTimeout(saveT);
   saveT=setTimeout(function(){
-    if(!user)return;
+    if(!user||!fbReady)return;
     ge("sync-icon").style.display="inline";
     db.doc("users/"+user.uid+"/planner/data").set(DATA).catch(function(){}).finally(function(){ge("sync-icon").style.display="none";});
   },700);
 }
 
 function subscribe(){
+  if(!fbReady)return;
   if(unsub)unsub();
   var first=true;
   unsub=db.doc("users/"+user.uid+"/planner/data").onSnapshot(function(snap){
@@ -426,32 +442,39 @@ function chkPay(){
   if(p.get("payment")==="cancel")window.history.replaceState({},"","/app.html");
 }
 
-auth.onAuthStateChanged(function(u){
-  ge("auth-msg").style.display="none";
-  if(u){
-    user=u;
-    tryCal();
-    // Show profiles immediately, subscribe for live updates
-    subscribe();
-    // If Firestore takes too long, still show profiles after 3s
-    setTimeout(function(){
-      if(ge("auth-screen").classList.contains("active")||ge("auth-screen").style.display!=="none"){
-        showProfiles();
-      }
-    },3000);
-  }
-  else{user=null;activeP=null;if(unsub){unsub();unsub=null;}showScr("auth-screen");}
-});
+if(fbReady){
+  auth.onAuthStateChanged(function(u){
+    ge("auth-msg").style.display="none";
+    if(u){
+      user=u;
+      tryCal();
+      // Show profiles immediately, subscribe for live updates
+      subscribe();
+      // If Firestore takes too long, still show profiles after 3s
+      setTimeout(function(){
+        if(ge("auth-screen").classList.contains("active")||ge("auth-screen").style.display!=="none"){
+          showProfiles();
+        }
+      },3000);
+    }
+    else{user=null;activeP=null;if(unsub){unsub();unsub=null;}showScr("auth-screen");}
+  });
 
-ge("btn-signin").addEventListener("click",function(){
-  ge("auth-msg").textContent="Signing in...";ge("auth-msg").style.display="block";
-  auth.signInWithPopup(gProv).then(function(res){
-    var cr=firebase.auth.GoogleAuthProvider.credentialFromResult(res);
-    if(cr&&cr.accessToken){calToken=cr.accessToken;if(user)localStorage.setItem("ct_"+user.uid,calToken);}
-  }).catch(function(){ge("auth-msg").textContent="Sign-in failed. Try again.";ge("auth-msg").style.color="var(--red)";});
-});
+  ge("btn-signin").addEventListener("click",function(){
+    ge("auth-msg").textContent="Signing in...";ge("auth-msg").style.display="block";
+    auth.signInWithPopup(gProv).then(function(res){
+      var cr=firebase.auth.GoogleAuthProvider.credentialFromResult(res);
+      if(cr&&cr.accessToken){calToken=cr.accessToken;if(user)localStorage.setItem("ct_"+user.uid,calToken);}
+    }).catch(function(){ge("auth-msg").textContent="Sign-in failed. Try again.";ge("auth-msg").style.color="var(--red)";});
+  });
 
-ge("btn-signout").addEventListener("click",function(){calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();});
+  ge("btn-signout").addEventListener("click",function(){calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();});
+}else{
+  var fbm=ge("auth-msg");
+  if(fbm){fbm.textContent="Could not load required sign-in services. Please check your internet connection or disable any ad blocker for this site, then refresh.";fbm.style.display="block";fbm.style.color="var(--red)";}
+  ge("btn-signin").addEventListener("click",function(){if(fbm){fbm.textContent="Still unable to load sign-in services - please refresh the page.";fbm.style.display="block";fbm.style.color="var(--red)";}});
+  var sob=ge("btn-signout");if(sob)sob.addEventListener("click",function(){});
+}
 
 function showScr(id){
   ["auth-screen","profile-screen"].forEach(function(s){
@@ -693,16 +716,30 @@ function renderToday(){
     else fi.forEach(function(f){h+='<div class="task-row" onclick="togFocus(\''+f.id+'\')"><div class="tcheck'+(f.done?" done":"")+'"></div><span class="ttext'+(f.done?" done":"")+'">'+esc(f.title)+'</span><button class="del-btn" onclick="event.stopPropagation();delFocus(\''+f.id+'\')">x</button></div>';});
     h+='</div>';
   }
+  var tasks=tasksFor(dk,null),choresHTML="";
+  choresHTML+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"📝 Daily To-Do")+'</span>';
+  if(activeP.role==="parent")choresHTML+='<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>';
+  choresHTML+='</div><div class="card red">';
+  if(!tasks.length)choresHTML+='<div class="empty">'+(isK?"No chores today! 🎉":"No to-dos - tap + Add.")+'</div>';
+  else tasks.forEach(function(t){
+    var done=isDone(t,dk);var ass=(t.assigneeIds||[]).map(function(id){return DATA.profiles.find(function(p){return p.id===id;});}).filter(Boolean);
+    choresHTML+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span>';
+    choresHTML+='<div style="display:flex;gap:3px">'+ass.map(function(a){return'<span style="width:20px;height:20px;border-radius:50%;background:'+a.color+'22;border:1.5px solid '+a.color+'44;font-size:11px;display:flex;align-items:center;justify-content:center">'+av(a)+'</span>';}).join("")+'</div>';
+    if(activeP.role==="parent")choresHTML+='<button class="del-btn" onclick="event.stopPropagation();delTask(\''+t.id+'\')">x</button>';
+    choresHTML+='</div>';
+  });
+  choresHTML+='</div>';
+  if(!isK)h+=choresHTML;
   var evts=evOn(dt),showE=isK?evts.filter(function(e){return e.isApp;}):evts;
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 Events today</span>';
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue);cursor:pointer" onclick="goPage(\'calendar\')" title="View monthly calendar">📅 Events today ›</span>';
   if(!isK)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openEventM(\''+dk+'\')">+ Add</button>';
   h+='</div><div class="card blue">';
   if(!showE.length)h+='<div class="empty">No events today.'+((!calToken&&!isK)?' Connect calendar in Settings.':"")+'</div>';
   else showE.forEach(function(ev){
     var col=ev.person?pc(ev.person):"var(--blue)";
-    h+='<div class="ev-row"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
+    h+='<div class="ev-row" style="cursor:pointer" onclick="goPage(\'calendar\')"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
     if(ev.person){var ep=(DATA.profiles||[]).find(function(x){return x.name===ev.person;});h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+(ep&&ep.photo?'<img src="'+ep.photo+'" style="width:12px;height:12px;border-radius:50%;object-fit:cover;margin-right:2px;vertical-align:middle">':'')+esc(ev.person)+'</span>';}
-    if(ev.isApp&&activeP.role==="parent")h+='<button class="del-btn" onclick="delAE(\''+ev.id+'\')">x</button>';
+    if(ev.isApp&&activeP.role==="parent")h+='<button class="del-btn" onclick="event.stopPropagation();delAE(\''+ev.id+'\')">x</button>';
     h+='</div>';
   });
   h+='</div>';
@@ -711,34 +748,33 @@ function renderToday(){
     h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">🍽 Tonight\'s dinner</span><button class="mini-btn" style="color:var(--mustard-text);border-color:var(--mustard)" onclick="openMealM(\''+dk+'\')">Edit</button></div>';
     h+='<div class="card mustard" style="padding:.875rem 1rem">'+(tm?'<span style="font-size:15px;font-weight:500">'+esc(tm)+'</span>':'<span style="font-size:13px;color:var(--muted);font-style:italic">No dinner planned - tap Edit.</span>')+'</div>';
     var ps=(DATA.shoppingList||[]).filter(function(s){return !s.done;});
-    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--green-bg);color:var(--green)">🛒 Shopping list</span><button class="mini-btn" style="color:var(--green);border-color:var(--green)" onclick="goPage(\'meals\')">View all</button></div>';
+    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--green-bg);color:var(--green)">🛒 Grocery list</span><button class="mini-btn" style="color:var(--green);border-color:var(--green)" onclick="goPage(\'meals\')">View all</button></div>';
     h+='<div class="card green">';
-    if(!ps.length)h+='<div class="empty" style="padding:.875rem">Shopping list is clear.</div>';
+    if(!ps.length)h+='<div class="empty" style="padding:.875rem">Grocery list is clear.</div>';
     else ps.slice(0,5).forEach(function(s){var ri=(DATA.shoppingList||[]).findIndex(function(x){return x.id===s.id;});h+='<div class="shop-row"><div class="shop-cb" onclick="togShopT('+ri+')"></div><span class="shop-text">'+esc(s.text)+'</span><button class="del-btn" onclick="delShopT('+ri+')">x</button></div>';});
     if(ps.length>5)h+='<div style="padding:.5rem 1rem;font-size:11px;color:var(--muted)">+'+(ps.length-5)+' more</div>';
     h+='<div class="add-row"><input class="add-inp" id="qshop" placeholder="Add item..."><button class="add-btn" onclick="qAddShop()">Add</button></div></div>';
+    var lsts=DATA.lists||[];
+    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--charcoal-bg);color:var(--charcoal)">🗒 My Lists</span><button class="mini-btn" style="color:var(--charcoal);border-color:var(--border)" onclick="openNL()">+ New</button></div>';
+    h+='<div class="card">';
+    if(!lsts.length)h+='<div class="empty">No lists yet - tap + New to add one.</div>';
+    else lsts.forEach(function(l){
+      var items=l.items||[],dcx=items.filter(function(it){return ldv(l.id,it.id,dk);}).length;
+      var cnt=l.type==="notes"?(items.length+' item'+(items.length!==1?'s':'')):(dcx+'/'+items.length);
+      h+='<div class="task-row" onclick="openListFromHome(\''+l.id+'\')" style="cursor:pointer"><span style="font-size:16px;margin-right:8px">'+(l.icon||'📋')+'</span><span class="ttext" style="flex:1">'+esc(l.name)+'</span><span style="font-size:11px;color:var(--muted)">'+cnt+'</span></div>';
+    });
+    h+='</div>';
     var gl=(DATA.water||{})[dk]||0;
     h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--water-bg);color:var(--blue)">💧 Water today</span><span style="font-size:11px;color:var(--muted)">'+gl+'/8 glasses</span></div>';
     h+='<div class="card blue" style="padding:.875rem 1rem"><div style="display:flex;gap:6px;flex-wrap:wrap">';
     for(var gi=0;gi<8;gi++)h+='<div class="water-glass'+(gi<gl?" on":"")+'" onclick="togWater(\''+dk+'\','+(gi+1)+')">💧</div>';
     h+='</div></div>';
   }
-  var tasks=tasksFor(dk,null);
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"📋 Chores")+'</span>';
-  if(activeP.role==="parent")h+='<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>';
-  h+='</div><div class="card red">';
-  if(!tasks.length)h+='<div class="empty">'+(isK?"No chores today! 🎉":"No chores - tap + Add.")+'</div>';
-  else tasks.forEach(function(t){
-    var done=isDone(t,dk);var ass=(t.assigneeIds||[]).map(function(id){return DATA.profiles.find(function(p){return p.id===id;});}).filter(Boolean);
-    h+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span>';
-    h+='<div style="display:flex;gap:3px">'+ass.map(function(a){return'<span style="width:20px;height:20px;border-radius:50%;background:'+a.color+'22;border:1.5px solid '+a.color+'44;font-size:11px;display:flex;align-items:center;justify-content:center">'+av(a)+'</span>';}).join("")+'</div>';
-    if(activeP.role==="parent")h+='<button class="del-btn" onclick="event.stopPropagation();delTask(\''+t.id+'\')">x</button>';
-    h+='</div>';
-  });
-  h+='</div>';
-  h+=renderEarningChores(isKid);
+  if(isK)h+=choresHTML;
+  h+=renderEarningChores(isK);
   pg.innerHTML=h;
 }
+function openListFromHome(id){aPage="lists";aListId=id;renderPage();renderNav();}
 
 function togFocus(id){var f=(DATA.focusItems||[]).find(function(x){return x.id===id;});if(f){f.done=!f.done;save();renderToday();}}
 function delFocus(id){DATA.focusItems=(DATA.focusItems||[]).filter(function(x){return x.id!==id;});save();renderToday();}
@@ -948,8 +984,8 @@ function selLI(el2,ic){nlIcon=ic;bldNLSel();}
 function selLC(el2,c){nlCol=c;bldNLSel();}
 function openNL(){nlIcon="📋";nlCol="#E8000A";nlEid=null;ge("nl-title").textContent="Create List";ge("nl-name").value="";ge("nl-type").value="tick";ge("nl-delete").style.display="none";bldNLSel();openModal("m-new-list");setTimeout(function(){ge("nl-name").focus();},100);}
 function editList(id){var l=(DATA.lists||[]).find(function(x){return x.id===id;});if(!l)return;nlEid=id;nlIcon=l.icon||"📋";nlCol=l.color||"#E8000A";ge("nl-title").textContent="Edit "+l.name;ge("nl-name").value=l.name;ge("nl-type").value=l.type||"tick";ge("nl-delete").style.display="block";bldNLSel();openModal("m-new-list");}
-ge("nl-save").addEventListener("click",function(){var nm=ge("nl-name").value.trim();if(!nm)return;DATA.lists=DATA.lists||[];if(nlEid){var idx=DATA.lists.findIndex(function(l){return l.id===nlEid;});if(idx>=0){DATA.lists[idx].name=nm;DATA.lists[idx].type=ge("nl-type").value;DATA.lists[idx].icon=nlIcon;DATA.lists[idx].color=nlCol;}}else DATA.lists.push({id:uid(),name:nm,type:ge("nl-type").value,icon:nlIcon,color:nlCol,items:[]});save();closeModal("m-new-list");aListId=null;renderLists();});
-ge("nl-delete").addEventListener("click",function(){if(!nlEid||!confirm("Delete list?"))return;DATA.lists=(DATA.lists||[]).filter(function(l){return l.id!==nlEid;});save();closeModal("m-new-list");aListId=null;renderLists();});
+ge("nl-save").addEventListener("click",function(){var nm=ge("nl-name").value.trim();if(!nm)return;DATA.lists=DATA.lists||[];if(nlEid){var idx=DATA.lists.findIndex(function(l){return l.id===nlEid;});if(idx>=0){DATA.lists[idx].name=nm;DATA.lists[idx].type=ge("nl-type").value;DATA.lists[idx].icon=nlIcon;DATA.lists[idx].color=nlCol;}}else DATA.lists.push({id:uid(),name:nm,type:ge("nl-type").value,icon:nlIcon,color:nlCol,items:[]});save();closeModal("m-new-list");aListId=null;renderPage();});
+ge("nl-delete").addEventListener("click",function(){if(!nlEid||!confirm("Delete list?"))return;DATA.lists=(DATA.lists||[]).filter(function(l){return l.id!==nlEid;});save();closeModal("m-new-list");aListId=null;renderPage();});
 
 var meDate2=null;
 function openMealM(dk){meDate2=dk;var pts=dk.split("-"),d=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]));ge("mm-title").textContent="Dinner for "+d.toLocaleDateString([],{weekday:"long",day:"numeric",month:"long"});ge("mm-meal").value=(DATA.meals||{})[dk]||"";ge("mm-sug").innerHTML="";openModal("m-meal");setTimeout(function(){ge("mm-meal").focus();},100);}
@@ -1071,18 +1107,11 @@ async function fetchRecipeUrl(){
 }
 
 // ── SIGN OUT ALL ──
-function signOutAll(){if(user)localStorage.removeItem("sp_pid_"+user.uid);calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();}
+function signOutAll(){if(user)localStorage.removeItem("sp_pid_"+user.uid);calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);if(fbReady)auth.signOut();}
 
 ge("auth-screen").className="screen active";
 </script>
 
-<div class="modal" id="m-earning"><div class="mbox">
-  <div class="mhandle"></div><div class="mtitle" id="ec-title">Add Earning Chore</div>
-  <div class="mf"><label class="ml">Chore description</label><input class="mi" id="ec-desc" type="text" placeholder="e.g. Clean out the garage"></div>
-  <div class="mf"><label class="ml">Reward</label><select class="msel" id="ec-reward-type"></select></div>
-  <div class="mf"><label class="ml">Reward detail</label><input class="mi" id="ec-reward-detail" type="text" placeholder="e.g. R20 or 1 hour extra"></div>
-  <div class="mbtns"><button class="mcancel" onclick="closeModal('m-earning')">Cancel</button><button class="msave" id="ec-save">Add</button></div>
-</div></div>
 <div id="reward-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;padding:2rem">
   <div style="background:#fff;border-radius:24px;padding:2.5rem 2rem;max-width:320px;width:100%;text-align:center">
     <div style="font-size:64px;margin-bottom:.5rem" id="rp-emoji">🎉</div>
