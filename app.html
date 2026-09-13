@@ -338,9 +338,6 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
   </div>
   <div class="mf"><label class="ml">Name</label><input class="mi" id="pm-name" type="text" placeholder="e.g. Luke"></div>
   <div class="mf"><label class="ml">Role</label><select class="msel" id="pm-role"><option value="parent">Parent (full access)</option><option value="child">Child (chores and events only)</option></select></div>
-  <div class="mf"><label class="ml">Avatar</label><div class="egrid" id="pm-emojis"></div></div>
-  <div class="mf"><label class="ml">Skin tone</label><div style="display:flex;gap:7px;flex-wrap:wrap;margin:.4rem 0" id="pm-skin"></div></div>
-  <div class="mf"><label class="ml">Hair colour</label><div style="display:flex;gap:7px;flex-wrap:wrap;margin:.4rem 0" id="pm-hair"></div></div>
   <div class="mf"><label class="ml">Profile colour</label><div class="cgrid" id="pm-colors"></div></div>
   <div class="mf"><label class="ml">PIN (4 digits, leave blank for no PIN)</label><input class="mi" id="pm-pin" type="number" placeholder="e.g. 1234"></div>
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-profile')">Cancel</button><button class="msave" id="pm-save">Save</button></div>
@@ -364,6 +361,7 @@ var DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 firebase.initializeApp(FB_CFG);
 var auth=firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
 var db=firebase.firestore();
 var gProv=new firebase.auth.GoogleAuthProvider();
 gProv.addScope("https://www.googleapis.com/auth/calendar.readonly");
@@ -371,18 +369,19 @@ gProv.addScope("https://www.googleapis.com/auth/calendar.readonly");
 var user=null,DATA=nd(),activeP=null,calEvts=[],calToken=null,tokenClient=null,unsub=null,saveT=null;
 var wCur=sow(new Date()),aDay=(new Date().getDay()+6)%7,aPage="today",moCur=new Date();
 var aListId=null,meDate=null,editPid=null,pinBuf="",pinTgt=null,selPlan2="monthly";
-var pPhoto=null,nlIcon="📋",nlCol="#E8000A",nlEid=null,avIdx="0",avSkin="",avHair="Black",addLid=null,eRid=null;
+var pPhoto=null,nlIcon="📋",nlCol="#E8000A",nlEid=null,addLid=null,eRid=null;
 
-function nd(){return{familyName:"The Family",profiles:[],tasks:[],focusItems:[],appEvents:[],lists:[],listDone:{},listNotes:{},meals:{},mealHistory:[],recipes:[],shoppingList:[],water:{},subscription:null};}
+function nd(){return{familyName:"The Family",profiles:[],tasks:[],focusItems:[],appEvents:[],lists:[],listDone:{},listNotes:{},meals:{},mealHistory:[],recipes:[],shoppingList:[],water:{},subscription:null,earningChores:[],rewardTypes:["Money","Screen time","Playdate","Family date"]};}
 function dkey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function sow(d){var x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-(x.getDay()+6)%7);return x;}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function compressPhoto(dataUrl,cb){var img=new Image();img.onload=function(){var MAX=400,ratio=Math.min(MAX/img.width,MAX/img.height,1);var c=document.createElement("canvas");c.width=Math.round(img.width*ratio);c.height=Math.round(img.height*ratio);c.getContext("2d").drawImage(img,0,0,c.width,c.height);cb(c.toDataURL("image/jpeg",0.7));};img.src=dataUrl;}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function dd(i){var d=new Date(wCur);d.setDate(d.getDate()+i);return d;}
 function tk(){return dkey(new Date());}
 function ws(){return dkey(sow(new Date()));}
 function pc(n){var p=DATA.profiles.find(function(x){return x.name===n;});return p?p.color:"#888580";}
-function av(i,s){var b=EMOJIS[parseInt(i)||0]||EMOJIS[0];return s?b+s:b;}
+function av(p){var n=p&&p.name?p.name:"?";return n.charAt(0).toUpperCase();}
 function ge(id){return document.getElementById(id);}
 
 function save(){
@@ -400,8 +399,19 @@ function subscribe(){
   unsub=db.doc("users/"+user.uid+"/planner/data").onSnapshot(function(snap){
     DATA=snap.exists?Object.assign(nd(),snap.data()):nd();
     if(activeP){var fr=DATA.profiles.find(function(p){return p.id===activeP.id;});if(fr)activeP=fr;}
-    if(first){first=false;chkPay();if(!hasAcc()){showPW();return;}if(!activeP)showProfiles();else renderAll();}
-    else renderAll();
+    if(first){
+      first=false;
+      chkPay();
+      if(!hasAcc()){showPW();return;}
+      if(!activeP){var lp=user?localStorage.getItem("sp_pid_"+user.uid):null;var lpp=lp?(DATA.profiles||[]).find(function(p){return p.id===lp;}):null;if(lpp&&!lpp.pin){activeP=lpp;launch();}else showProfiles();}else renderAll();
+    } else {
+      if(activeP)renderAll();
+      else showProfiles();
+    }
+  },function(err){
+    // Firestore error - still show profiles with empty data
+    console.warn('Firestore error:',err.message);
+    if(first){first=false;showProfiles();}
   });
 }
 
@@ -418,7 +428,18 @@ function chkPay(){
 
 auth.onAuthStateChanged(function(u){
   ge("auth-msg").style.display="none";
-  if(u){user=u;subscribe();tryCal();}
+  if(u){
+    user=u;
+    tryCal();
+    // Show profiles immediately, subscribe for live updates
+    subscribe();
+    // If Firestore takes too long, still show profiles after 3s
+    setTimeout(function(){
+      if(ge("auth-screen").classList.contains("active")||ge("auth-screen").style.display!=="none"){
+        showProfiles();
+      }
+    },3000);
+  }
   else{user=null;activeP=null;if(unsub){unsub();unsub=null;}showScr("auth-screen");}
 });
 
@@ -433,8 +454,14 @@ ge("btn-signin").addEventListener("click",function(){
 ge("btn-signout").addEventListener("click",function(){calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();});
 
 function showScr(id){
-  ["auth-screen","profile-screen"].forEach(function(s){ge(s).className="screen"+(s===id?" active":"");});
-  ge("paywall-screen").style.display="none";ge("app").style.display="none";ge("pin-screen").style.display="none";
+  ["auth-screen","profile-screen"].forEach(function(s){
+    var el=ge(s);
+    el.className="screen"+(s===id?" active":"");
+    el.style.display=s===id?"flex":"none";
+  });
+  ge("paywall-screen").style.display="none";
+  ge("app").style.display="none";
+  ge("pin-screen").style.display="none";
 }
 function showProfiles(){showScr("profile-screen");renderProfiles();}
 function showPW(){
@@ -459,7 +486,7 @@ function renderProfiles(){
   ge("fam-display").textContent=DATA.familyName||"The Family Planner";
   var g=ge("profile-grid"),h="",profs=DATA.profiles||[];
   profs.forEach(function(p){
-    var avh=p.photo?('<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'):av(p.avatarIdx||"0",p.avatarSkin||"");
+    var avh=p.photo?('<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'):av(p);
     h+='<div class="p-tile" data-pid="'+p.id+'">';
     h+='<div class="p-av" style="background:'+p.color+'22;border:2px solid '+p.color+'44">'+avh+'</div>';
     h+='<div class="p-name">'+esc(p.name)+'</div>';
@@ -482,7 +509,7 @@ function pickP(id){
 function showPin(p){
   pinTgt=p;pinBuf="";
   ge("pin-screen").style.display="flex";
-  ge("pin-av").textContent=av(p.avatarIdx||"0",p.avatarSkin||"");
+  ge("pin-av").textContent=av(p);
   ge("pin-av").style.background=p.color+"22";
   ge("pin-name").textContent=p.name;
   ge("pin-err").textContent="";
@@ -610,10 +637,7 @@ function calcSc(){
   return{pct:Math.round(done/all.length*100),members:(DATA.profiles||[]).map(function(p){var pt=all.filter(function(t){return(t.assigneeIds||[]).indexOf(p.id)>=0;});var pd=pt.filter(function(t){return isDoneFor(t,dk,p.id);}).length;return{name:p.name,color:p.color,pct:pt.length?Math.round(pd/pt.length*100):0,done:pd,total:pt.length};}).filter(function(m){return m.total>0;})};
 }
 
-function launch(){
-  ge("app").style.display="flex";ge("app").style.flexDirection="column";
-  wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage="today";renderAll();
-}
+function launch(){ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage="today";renderAll();}
 function renderAll(){if(!activeP)return;renderTB();renderSB();renderNav();renderPage();}
 function renderPage(){
   document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});
@@ -630,7 +654,7 @@ function goPage(p){aPage=p;aListId=null;renderPage();renderNav();}
 function renderTB(){
   var a=ge("pill-av");
   if(activeP.photo){a.innerHTML='<img src="'+activeP.photo+'" style="width:22px;height:22px;border-radius:50%;object-fit:cover">';a.style.background="transparent";}
-  else{a.textContent=av(activeP.avatarIdx||"0",activeP.avatarSkin||"");a.style.background=activeP.color+"22";}
+  else{a.textContent=av(activeP);a.style.background=activeP.color+"22";}
   ge("pill-name").textContent=activeP.name;
 }
 
@@ -677,7 +701,7 @@ function renderToday(){
   else showE.forEach(function(ev){
     var col=ev.person?pc(ev.person):"var(--blue)";
     h+='<div class="ev-row"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
-    if(ev.person)h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+esc(ev.person)+'</span>';
+    if(ev.person){var ep=(DATA.profiles||[]).find(function(x){return x.name===ev.person;});h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+(ep&&ep.photo?'<img src="'+ep.photo+'" style="width:12px;height:12px;border-radius:50%;object-fit:cover;margin-right:2px;vertical-align:middle">':'')+esc(ev.person)+'</span>';}
     if(ev.isApp&&activeP.role==="parent")h+='<button class="del-btn" onclick="delAE(\''+ev.id+'\')">x</button>';
     h+='</div>';
   });
@@ -707,11 +731,12 @@ function renderToday(){
   else tasks.forEach(function(t){
     var done=isDone(t,dk);var ass=(t.assigneeIds||[]).map(function(id){return DATA.profiles.find(function(p){return p.id===id;});}).filter(Boolean);
     h+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span>';
-    h+='<div style="display:flex;gap:3px">'+ass.map(function(a){return'<span style="width:20px;height:20px;border-radius:50%;background:'+a.color+'22;border:1.5px solid '+a.color+'44;font-size:11px;display:flex;align-items:center;justify-content:center">'+av(a.avatarIdx||"0",a.avatarSkin||"")+'</span>';}).join("")+'</div>';
+    h+='<div style="display:flex;gap:3px">'+ass.map(function(a){return'<span style="width:20px;height:20px;border-radius:50%;background:'+a.color+'22;border:1.5px solid '+a.color+'44;font-size:11px;display:flex;align-items:center;justify-content:center">'+av(a)+'</span>';}).join("")+'</div>';
     if(activeP.role==="parent")h+='<button class="del-btn" onclick="event.stopPropagation();delTask(\''+t.id+'\')">x</button>';
     h+='</div>';
   });
   h+='</div>';
+  h+=renderEarningChores(isKid);
   pg.innerHTML=h;
 }
 
@@ -733,7 +758,7 @@ function renderFamily(){
     });
     var done=tasks.filter(function(t){return isDoneFor(t,dk,p.id);}).length,pct=tasks.length?Math.round(done/tasks.length*100):0;
     var pending=tasks.filter(function(t){return !isDoneFor(t,dk,p.id);});
-    var avh=p.photo?('<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'):av(p.avatarIdx||"0",p.avatarSkin||"");
+    var avh=p.photo?('<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'):av(p);
     h+='<div class="fam-card"><div class="fc-top"><div class="fc-av" style="background:'+p.color+'22;border:2px solid '+p.color+'44">'+avh+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:10px;color:var(--muted)">'+(p.role==="parent"?"Parent":"Child")+' · '+done+'/'+tasks.length+' done</div></div><div style="text-align:right"><div style="font-size:21px;font-weight:700;color:'+p.color+'">'+pct+'%</div>'+(pct===100&&tasks.length?'<div>🌟</div>':'')+'</div></div>';
     h+='<div class="fc-prog"><div class="fc-fill" style="width:'+pct+'%;background:'+p.color+'"></div></div>';
     if(pending.length)h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">'+pending.map(function(t){return'<span style="font-size:11px;background:'+p.color+'11;color:'+p.color+';padding:1px 6px;border-radius:8px">'+esc(t.title)+'</span>';}).join("")+'</div>';
@@ -758,7 +783,7 @@ function renderCalendar(){
     var col=ev.person?pc(ev.person):"var(--blue)";
     h+='<div class="ev-row"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
     if(!ev.allDay)h+='<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>';
-    if(ev.person)h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+esc(ev.person)+'</span>';
+    if(ev.person){var ep=(DATA.profiles||[]).find(function(x){return x.name===ev.person;});h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+(ep&&ep.photo?'<img src="'+ep.photo+'" style="width:12px;height:12px;border-radius:50%;object-fit:cover;margin-right:2px;vertical-align:middle">':'')+esc(ev.person)+'</span>';}
     if(ev.isApp&&activeP.role==="parent")h+='<button class="del-btn" onclick="delAE(\''+ev.id+'\')">x</button>';
     h+='</div>';
   });
@@ -878,12 +903,14 @@ function renderSettings(){
   h+='</div></div>';
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Family</span></div><div class="crow"><span style="font-size:13px;font-weight:600;min-width:100px">Family name</span><input style="flex:1;border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-size:13px;outline:none" id="fni" value="'+esc(DATA.familyName||'The Family')+'" placeholder="e.g. The Pool Family"><button onclick="saveFN()" style="padding:6px 13px;border-radius:var(--radius);border:none;background:var(--red);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button></div></div>';
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Family Members</span><button onclick="openAddProfile()" style="font-size:11px;padding:4px 11px;border-radius:12px;border:none;background:var(--red);color:#fff;font-weight:600;cursor:pointer">+ Add</button></div>';
-  (DATA.profiles||[]).forEach(function(p){h+='<div class="crow"><div style="width:34px;height:34px;border-radius:50%;background:'+p.color+'22;border:2px solid '+p.color+'44;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden">'+(p.photo?'<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':av(p.avatarIdx||"0",p.avatarSkin||""))+'</div><div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:11px;color:var(--muted)">'+(p.role==="parent"?"Parent":"Child")+(p.pin?' 🔒':'')+'</div></div><button onclick="openEditProfile(\''+p.id+'\')" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Edit</button></div>';});
+  (DATA.profiles||[]).forEach(function(p){h+='<div class="crow"><div style="width:34px;height:34px;border-radius:50%;background:'+p.color+'22;border:2px solid '+p.color+'44;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden">'+(p.photo?'<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">':av(p))+'</div><div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:11px;color:var(--muted)">'+(p.role==="parent"?"Parent":"Child")+(p.pin?' 🔒':'')+'</div></div><button onclick="openEditProfile(\''+p.id+'\')" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Edit</button></div>';});
   h+='</div>';
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Google Calendar</span></div><div class="crow"><span style="font-size:20px">📅</span><div style="flex:1"><div style="font-size:13px;font-weight:600">'+(calToken?'Connected':'Not connected')+'</div></div>';
   h+=calToken?'<button onclick="disCal()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button>':'<button onclick="conCal()" style="padding:5px 13px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Connect</button>';
   h+='</div></div>';
-  h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
+  h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
+h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
+h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
   ge("page-settings").innerHTML=h;
   ge("fni").addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
@@ -895,7 +922,7 @@ function openModal(id){ge(id).classList.add("open");}
 function closeModal(id){ge(id).classList.remove("open");}
 document.querySelectorAll(".modal").forEach(function(m){m.addEventListener("click",function(e){if(e.target===m)m.classList.remove("open");});});
 
-function bldChips(cid,sids){ge(cid).innerHTML=(DATA.profiles||[]).map(function(p){var s=(sids||[]).indexOf(p.id)>=0;return'<span class="achip'+(s?' sel':'')+'" data-id="'+p.id+'" style="background:'+p.color+'22;color:'+p.color+'" onclick="this.classList.toggle(\'sel\')">'+av(p.avatarIdx||'0',p.avatarSkin||'')+' '+esc(p.name)+'</span>';}).join("");}
+function bldChips(cid,sids){ge(cid).innerHTML=(DATA.profiles||[]).map(function(p){var s=(sids||[]).indexOf(p.id)>=0;return'<span class="achip'+(s?' sel':'')+'" data-id="'+p.id+'" style="background:'+p.color+'22;color:'+p.color+'" onclick="this.classList.toggle(\'sel\')">'+av(p)+' '+esc(p.name)+'</span>';}).join("");}
 function gChips(cid){return[...ge(cid).querySelectorAll(".achip.sel")].map(function(c){return c.dataset.id;});}
 
 function openTaskM(dk){ge("tm-title").value="";ge("tm-date").value=dk||tk();ge("tm-repeat").value="none";bldChips("tm-chips",[]);openModal("m-task");setTimeout(function(){ge("tm-title").focus();},100);}
@@ -954,27 +981,19 @@ function prec(text){
   return{title:title,ingredients:ings,notes:nls.slice(0,2).join(" · ")||""};
 }
 
-function bldPM(){
-  ge("pm-emojis").innerHTML=EMOJIS.map(function(e,i){var s=String(i)===avIdx;return'<div class="eopt'+(s?" sel":"")+'" onclick="sAT(\''+i+'\')" style="font-size:20px">'+av(String(i),avSkin)+'</div>';}).join("");
-  ge("pm-skin").innerHTML=SKIN.map(function(s){return'<div onclick="sAS(\''+s.m+'\')" title="skin" style="width:28px;height:28px;border-radius:50%;background:'+s.h+';border:3px solid '+(avSkin===s.m?"#2F2F2F":"transparent")+';cursor:pointer;flex-shrink:0"></div>';}).join("");
-  ge("pm-hair").innerHTML=HAIR.map(function(h2){return'<div onclick="sAH(\''+h2.l+'\')" title="'+h2.l+'" style="width:28px;height:28px;border-radius:50%;background:'+h2.h+';border:3px solid '+(avHair===h2.l?"#2F2F2F":"transparent")+';cursor:pointer;flex-shrink:0"></div>';}).join("");
-  ge("pm-colors").innerHTML=PCOLS.map(function(c){var s=(ge("pm-colors").dataset.sel||PCOLS[0])===c;return'<div class="copt'+(s?" sel":"")+'" onclick="sPC(\''+c+'\')" style="background:'+c+';border-color:'+(s?"#2F2F2F":"transparent")+'"></div>';}).join("");
-}
-function sAT(i){avIdx=i;bldPM();}
-function sAS(m){avSkin=m;bldPM();}
-function sAH(l){avHair=l;bldPM();}
-function sPC(c){ge("pm-colors").dataset.sel=c;bldPM();}
+function bldPM(){ge("pm-colors").innerHTML=PCOLS.map(function(c){var s=(ge("pm-colors").dataset.sel||PCOLS[0])===c;return'<div class="copt'+(s?" sel":"")+'" onclick="selPC(\'"+c+"\',this)" style="background:"+c+";border-color:"+(s?"#2F2F2F":"transparent")+"></div>';}).join("");}
+function selPC(c){ge("pm-colors").dataset.sel=c;bldPM();}
 function clearPhoto(){pPhoto=null;ge("pm-photo-preview").innerHTML="photo";ge("pm-photo-preview").style.background="var(--charcoal-bg)";ge("pm-photo-inp").value="";}
 ge("pm-photo-inp").addEventListener("change",function(){
   var f=this.files[0];if(!f)return;
-  var r=new FileReader();r.onload=function(ev){pPhoto=ev.target.result;ge("pm-photo-preview").innerHTML='<img src="'+ev.target.result+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';ge("pm-photo-preview").style.background="transparent";};r.readAsDataURL(f);
+  var r=new FileReader();r.onload=function(ev){compressPhoto(ev.target.result,function(comp){pPhoto=comp;ge("pm-photo-preview").innerHTML='<img src="'+comp+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';ge("pm-photo-preview").style.background="transparent";});};r.readAsDataURL(f);
 });
 
-function openAddProfile(){editPid=null;pPhoto=null;avIdx="0";avSkin="";avHair="Black";ge("pm-title").textContent="Add Family Member";ge("pm-name").value="";ge("pm-role").value="child";ge("pm-pin").value="";ge("pm-delete").style.display="none";ge("pm-photo-preview").innerHTML="photo";ge("pm-photo-preview").style.background="var(--charcoal-bg)";ge("pm-colors").dataset.sel=PCOLS[0];bldPM();openModal("m-profile");setTimeout(function(){ge("pm-name").focus();},100);}
-function openEditProfile(id){var p=(DATA.profiles||[]).find(function(x){return x.id===id;});if(!p)return;editPid=id;pPhoto=p.photo||null;avIdx=p.avatarIdx||"0";avSkin=p.avatarSkin||"";avHair=p.avatarHair||"Black";ge("pm-title").textContent="Edit "+p.name;ge("pm-name").value=p.name;ge("pm-role").value=p.role||"child";ge("pm-pin").value=p.pin||"";ge("pm-delete").style.display="block";if(p.photo){ge("pm-photo-preview").innerHTML='<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';ge("pm-photo-preview").style.background="transparent";}else{ge("pm-photo-preview").innerHTML="photo";ge("pm-photo-preview").style.background="var(--charcoal-bg)";}ge("pm-colors").dataset.sel=p.color||PCOLS[0];bldPM();openModal("m-profile");}
+function openAddProfile(){editPid=null;pPhoto=null;ge("pm-title").textContent="Add Family Member";ge("pm-name").value="";ge("pm-role").value="child";ge("pm-pin").value="";ge("pm-delete").style.display="none";ge("pm-photo-preview").innerHTML="📷";ge("pm-photo-preview").style.background="var(--charcoal-bg)";ge("pm-colors").dataset.sel=PCOLS[0];bldPM();openModal("m-profile");setTimeout(function(){ge("pm-name").focus();},100);}
+function openEditProfile(id){var p=(DATA.profiles||[]).find(function(x){return x.id===id;});if(!p)return;editPid=id;pPhoto=p.photo||null;ge("pm-title").textContent="Edit "+p.name;ge("pm-name").value=p.name;ge("pm-role").value=p.role||"child";ge("pm-pin").value=p.pin||"";ge("pm-delete").style.display="block";if(p.photo){ge("pm-photo-preview").innerHTML='<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';ge("pm-photo-preview").style.background="transparent";}else{ge("pm-photo-preview").innerHTML="📷";ge("pm-photo-preview").style.background="var(--charcoal-bg)";}ge("pm-colors").dataset.sel=p.color||PCOLS[0];bldPM();openModal("m-profile");}
 ge("pm-save").addEventListener("click",function(){
   var nm=ge("pm-name").value.trim();if(!nm)return;
-  var col=ge("pm-colors").dataset.sel||PCOLS[0],role=ge("pm-role").value,pin=ge("pm-pin").value.replace(/\D/g,"").slice(0,4),emoji=av(avIdx,avSkin);
+  var col=ge("pm-colors").dataset.sel||PCOLS[0],role=ge("pm-role").value,pin=ge("pm-pin").value.replace(/\D/g,"").slice(0,4),emoji=av(null);
   var prof={name:nm,emoji:emoji,avatarIdx:avIdx,avatarSkin:avSkin,avatarHair:avHair,photo:pPhoto||null,color:col,role:role,pin:pin};
   DATA.profiles=DATA.profiles||[];
   if(editPid){var idx=DATA.profiles.findIndex(function(x){return x.id===editPid;});if(idx>=0)DATA.profiles[idx]=Object.assign({},DATA.profiles[idx],prof);}
@@ -983,7 +1002,95 @@ ge("pm-save").addEventListener("click",function(){
 });
 ge("pm-delete").addEventListener("click",function(){if(!editPid||!confirm("Remove family member?"))return;DATA.profiles=DATA.profiles.filter(function(x){return x.id!==editPid;});save();closeModal("m-profile");renderProfiles();if(aPage==="settings")renderSettings();});
 
+
+// ── EARNING CHORES ──
+function renderEarningChores(isKid){
+  var ecs=DATA.earningChores||[],myId=activeP?activeP.id:null;
+  var h='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">⭐ Earning Chores</span>';
+  if(!isKid)h+='<button class="mini-btn" style="color:var(--mustard-text);border-color:var(--mustard)" onclick="openEarningModal()">+ Add</button>';
+  h+='</div><div class="card mustard">';
+  var vis=isKid?ecs.filter(function(e){return !e.claimedBy||e.claimedBy===myId;}):ecs;
+  if(!vis.length)h+='<div class="empty">No earning chores yet.'+(isKid?' Ask mom or dad!':'')+'</div>';
+  else vis.forEach(function(ec){
+    var cp=ec.claimedBy?(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;}):null;
+    var canClaim=isKid&&!ec.claimedBy&&!ec.approved;
+    h+='<div class="task-row" style="cursor:'+(canClaim?'pointer':'default')+'" '+(canClaim?'onclick="claimEC(''+ec.id+'')"':'')+'>'+
+      '<div class="tcheck'+(ec.approved?' done':ec.claimedBy?' done':'')+'" style="'+(ec.approved?'border-color:var(--green);background:var(--green)':ec.claimedBy?'border-color:var(--mustard);background:var(--mustard)':'')+'" ></div>'+
+      '<div style="flex:1"><div class="ttext">'+esc(ec.desc)+'</div>'+
+      '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+esc(ec.rewardType)+(ec.rewardDetail?' · '+esc(ec.rewardDetail):'')+
+      (cp&&!ec.approved?' · Claimed by '+esc(cp.name)+' — awaiting approval':'')+(ec.approved?' · Approved ✓':'')+'</div></div>';
+    if(!isKid&&ec.claimedBy&&!ec.approved)h+='<button onclick="approveEC(''+ec.id+'')" style="padding:4px 10px;border-radius:var(--radius);border:none;background:var(--green);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Approve</button>';
+    if(!isKid)h+='<button class="del-btn" onclick="delEC(''+ec.id+'')">x</button>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+function claimEC(id){var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec||ec.claimedBy)return;ec.claimedBy=activeP.id;save();renderToday();}
+function approveEC(id){
+  var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec)return;
+  ec.approved=true;save();
+  var kp=(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;});
+  var emjs={"Money":"💰","Screen time":"📱","Playdate":"🤝","Family date":"❤️"};
+  ge("rp-emoji").textContent=emjs[ec.rewardType]||"🎉";
+  ge("rp-name").textContent=(kp?kp.name:"Someone")+" earned a reward!";
+  ge("rp-reward").textContent=ec.rewardType+(ec.rewardDetail?" — "+ec.rewardDetail:"");
+  ge("reward-popup").style.display="flex";
+  renderAll();
+}
+function delEC(id){DATA.earningChores=(DATA.earningChores||[]).filter(function(x){return x.id!==id;});save();renderAll();}
+function openEarningModal(){
+  var rt=DATA.rewardTypes||["Money","Screen time","Playdate","Family date"];
+  ge("ec-reward-type").innerHTML=rt.map(function(r){return'<option>'+esc(r)+'</option>';}).join("");
+  ge("ec-desc").value="";ge("ec-reward-detail").value="";
+  openModal("m-earning");setTimeout(function(){ge("ec-desc").focus();},100);
+}
+ge("ec-save").addEventListener("click",function(){
+  var desc=ge("ec-desc").value.trim();if(!desc)return;
+  DATA.earningChores=DATA.earningChores||[];
+  DATA.earningChores.push({id:uid(),desc:desc,rewardType:ge("ec-reward-type").value,rewardDetail:ge("ec-reward-detail").value.trim(),claimedBy:null,approved:false});
+  save();closeModal("m-earning");renderAll();
+});
+ge("ec-desc").addEventListener("keydown",function(e){if(e.key==="Enter")ge("ec-save").click();});
+
+// ── URL RECIPE FETCH ──
+function irShowResult(parsed){ge("ire").style.display="none";ge("irn").value=parsed.title||"";ge("iri").value=(parsed.ingredients||[]).join("\n");ge("irno").value=parsed.notes||"";ge("irr").style.display="block";ge("irsb").style.display="block";}
+function irShowErr(msg){ge("ir-loading").style.display="none";ge("ire").textContent=msg;ge("ire").style.display="block";}
+async function fetchRecipeUrl(){
+  var url=ge("irurl").value.trim();if(!url){irShowErr("Please enter a URL.");return;}
+  ge("ir-loading").style.display="block";ge("ire").style.display="none";ge("irr").style.display="none";
+  try{
+    var resp=await fetch("https://api.allorigins.win/get?url="+encodeURIComponent(url));
+    var data=await resp.json();var h2=data.contents||"";
+    var jld=h2.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+    if(jld){try{var obj=JSON.parse(jld[1].trim());var r=Array.isArray(obj)?obj.find(function(x){return x["@type"]==="Recipe";})||obj[0]:obj;if(r&&r.recipeIngredient){var ings=r.recipeIngredient||[];var method="";if(r.recipeInstructions)method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map(function(s){return typeof s==="string"?s:(s.text||"");}).join("\n"):String(r.recipeInstructions);ge("ir-loading").style.display="none";irShowResult({title:r.name||"Recipe",ingredients:ings,notes:(r.description||"")+(method?"\n\nMethod:\n"+method:"")});return;}}catch(e){}}
+    var txt=h2.replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
+    var p=prec(txt);ge("ir-loading").style.display="none";
+    if(p.error)irShowErr("Could not extract recipe. Try the Paste text option instead.");
+    else irShowResult(p);
+  }catch(e){irShowErr("Could not fetch URL. Try copying the text and using Paste text.");}
+}
+
+// ── SIGN OUT ALL ──
+function signOutAll(){if(user)localStorage.removeItem("sp_pid_"+user.uid);calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();}
+
 ge("auth-screen").className="screen active";
 </script>
+
+<div class="modal" id="m-earning"><div class="mbox">
+  <div class="mhandle"></div><div class="mtitle" id="ec-title">Add Earning Chore</div>
+  <div class="mf"><label class="ml">Chore description</label><input class="mi" id="ec-desc" type="text" placeholder="e.g. Clean out the garage"></div>
+  <div class="mf"><label class="ml">Reward</label><select class="msel" id="ec-reward-type"></select></div>
+  <div class="mf"><label class="ml">Reward detail</label><input class="mi" id="ec-reward-detail" type="text" placeholder="e.g. R20 or 1 hour extra"></div>
+  <div class="mbtns"><button class="mcancel" onclick="closeModal('m-earning')">Cancel</button><button class="msave" id="ec-save">Add</button></div>
+</div></div>
+<div id="reward-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;padding:2rem">
+  <div style="background:#fff;border-radius:24px;padding:2.5rem 2rem;max-width:320px;width:100%;text-align:center">
+    <div style="font-size:64px;margin-bottom:.5rem" id="rp-emoji">🎉</div>
+    <h2 style="font-family:'Lora',serif;font-size:22px;color:var(--red);margin-bottom:.5rem">You earned it!</h2>
+    <p id="rp-name" style="font-size:16px;font-weight:600;margin-bottom:.25rem"></p>
+    <p id="rp-reward" style="font-size:14px;color:var(--muted);margin-bottom:1.5rem"></p>
+    <button onclick="ge('reward-popup').style.display='none'" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:none;background:var(--red);color:#fff;font-size:16px;font-weight:700;cursor:pointer">Awesome! 🌟</button>
+  </div>
+</div>
 </body>
 </html>
