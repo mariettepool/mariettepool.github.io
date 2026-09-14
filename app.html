@@ -1092,19 +1092,53 @@ ge("ec-desc").addEventListener("keydown",function(e){if(e.key==="Enter")ge("ec-s
 // ── URL RECIPE FETCH ──
 function irShowResult(parsed){ge("ire").style.display="none";ge("irn").value=parsed.title||"";ge("iri").value=(parsed.ingredients||[]).join("\n");ge("irno").value=parsed.notes||"";ge("irr").style.display="block";ge("irsb").style.display="block";}
 function irShowErr(msg){ge("ir-loading").style.display="none";ge("ire").textContent=msg;ge("ire").style.display="block";}
+function findRecipeNode(node){
+  if(!node||typeof node!=="object")return null;
+  if(Array.isArray(node)){for(var i=0;i<node.length;i++){var f=findRecipeNode(node[i]);if(f)return f;}return null;}
+  var ty=node["@type"];
+  if(ty==="Recipe"||(Array.isArray(ty)&&ty.indexOf("Recipe")>=0))return node;
+  if(node["@graph"]){var g=findRecipeNode(node["@graph"]);if(g)return g;}
+  return null;
+}
+async function fetchViaProxy(url){
+  var attempts=[
+    function(){return fetch("https://api.allorigins.win/get?url="+encodeURIComponent(url)).then(function(r){return r.json();}).then(function(d){return d&&d.contents?d.contents:null;});},
+    function(){return fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(url)).then(function(r){return r.text();});},
+    function(){return fetch("https://corsproxy.io/?url="+encodeURIComponent(url)).then(function(r){return r.text();});}
+  ];
+  for(var i=0;i<attempts.length;i++){
+    try{var html=await attempts[i]();if(html&&html.length>200)return html;}catch(e){}
+  }
+  return null;
+}
 async function fetchRecipeUrl(){
   var url=ge("irurl").value.trim();if(!url){irShowErr("Please enter a URL.");return;}
+  if(!/^https?:\/\//i.test(url))url="https://"+url;
   ge("ir-loading").style.display="block";ge("ire").style.display="none";ge("irr").style.display="none";
   try{
-    var resp=await fetch("https://api.allorigins.win/get?url="+encodeURIComponent(url));
-    var data=await resp.json();var h2=data.contents||"";
-    var jld=h2.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
-    if(jld){try{var obj=JSON.parse(jld[1].trim());var r=Array.isArray(obj)?obj.find(function(x){return x["@type"]==="Recipe";})||obj[0]:obj;if(r&&r.recipeIngredient){var ings=r.recipeIngredient||[];var method="";if(r.recipeInstructions)method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map(function(s){return typeof s==="string"?s:(s.text||"");}).join("\n"):String(r.recipeInstructions);ge("ir-loading").style.display="none";irShowResult({title:r.name||"Recipe",ingredients:ings,notes:(r.description||"")+(method?"\n\nMethod:\n"+method:"")});return;}}catch(e){}}
-    var txt=h2.replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
+    var html=await fetchViaProxy(url);
+    if(!html){irShowErr("Could not fetch that page. Try copying the recipe text and pasting it below instead.");return;}
+    var blocks=html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)||[];
+    for(var i=0;i<blocks.length;i++){
+      try{
+        var inner=blocks[i].replace(/^<script[^>]*>/i,"").replace(/<\/script>\s*$/i,"").trim();
+        var obj=JSON.parse(inner);
+        var r=findRecipeNode(obj);
+        if(r&&r.recipeIngredient&&r.recipeIngredient.length){
+          var ings=r.recipeIngredient||[];
+          var method="";
+          if(r.recipeInstructions)method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map(function(s){return typeof s==="string"?s:(s.text||s.name||"");}).filter(Boolean).join("\n"):String(r.recipeInstructions).replace(/<[^>]+>/g," ");
+          ge("ir-loading").style.display="none";
+          irShowResult({title:r.name||"Recipe",ingredients:ings,notes:(r.description||"")+(method?"\n\nMethod:\n"+method:"")});
+          return;
+        }
+      }catch(e){}
+    }
+    var txt=html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&#8217;|&rsquo;/g,"'").replace(/\s+/g," ");
     var p=prec(txt);ge("ir-loading").style.display="none";
-    if(p.error)irShowErr("Could not extract recipe. Try the Paste text option instead.");
+    if(p.error)irShowErr("Could not automatically find the recipe on that page. Try copying the ingredients and using Paste text instead.");
     else irShowResult(p);
-  }catch(e){irShowErr("Could not fetch URL. Try copying the text and using Paste text.");}
+  }catch(e){irShowErr("Could not fetch that URL. Try copying the recipe text and using Paste text instead.");}
 }
 
 // ── SIGN OUT ALL ──
