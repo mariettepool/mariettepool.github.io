@@ -273,9 +273,9 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 <div class="modal" id="m-task"><div class="mbox">
   <div class="mhandle"></div><div class="mtitle">Add Chore</div>
   <div class="mf"><label class="ml">What needs doing?</label><input class="mi" id="tm-title" type="text" placeholder="e.g. Make your bed"></div>
-  <div class="mf"><label class="ml">Assign to</label><div class="achips" id="tm-chips"></div></div>
+  <div class="mf"><label class="ml">Assign to (kids only)</label><div class="achips" id="tm-chips"></div></div>
   <div class="mf"><label class="ml">Date</label><input class="mi" id="tm-date" type="date"></div>
-  <div class="mf"><label class="ml">Repeat</label><select class="msel" id="tm-repeat"><option value="none">Just this day</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="weekdays">Weekdays only</option></select></div>
+  <div class="mf"><label class="ml">Repeat</label><select class="msel" id="tm-repeat"><option value="none">Just this day</option><option value="daily">Every day</option><option value="every2days">Every 2 days</option><option value="weekly">Every week</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Every month</option><option value="weekdays">Weekdays only</option></select></div>
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-task')">Cancel</button><button class="msave" id="tm-save">Add</button></div>
 </div></div>
 
@@ -604,14 +604,22 @@ function evOn(dt){
   return gc.concat(ae).sort(function(a,b){return a.allDay&&!b.allDay?-1:!a.allDay&&b.allDay?1:a.start-b.start;});
 }
 
+function taskRepeatsOn(t,dk){
+  if(!t.repeat||t.repeat==="none")return t.date===dk;
+  var o=new Date(t.date+"T00:00:00"),tg=new Date(dk+"T00:00:00");
+  if(tg<o)return false;
+  var days=Math.round((tg-o)/86400000);
+  if(t.repeat==="daily")return true;
+  if(t.repeat==="every2days")return days%2===0;
+  if(t.repeat==="weekly")return days%7===0;
+  if(t.repeat==="biweekly")return days%14===0;
+  if(t.repeat==="monthly")return o.getDate()===tg.getDate();
+  if(t.repeat==="weekdays"){var dw=tg.getDay();return dw>=1&&dw<=5;}
+  return false;
+}
 function tasksFor(dk,pid){
   return(DATA.tasks||[]).filter(function(t){
-    var ok=false;
-    if(!t.repeat||t.repeat==="none")ok=t.date===dk;
-    else if(t.repeat==="daily")ok=t.date<=dk;
-    else if(t.repeat==="weekly"){var o=new Date(t.date+"T00:00:00"),tg=new Date(dk+"T00:00:00");if(tg>=o){ok=Math.round((tg-o)/86400000)%7===0;}}
-    else if(t.repeat==="weekdays"){var o2=new Date(t.date+"T00:00:00"),tg2=new Date(dk+"T00:00:00");if(tg2>=o2){var dw=tg2.getDay();ok=dw>=1&&dw<=5;}}
-    if(!ok)return false;
+    if(!taskRepeatsOn(t,dk))return false;
     if(pid)return(t.assigneeIds||[]).indexOf(pid)>=0;
     if(!activeP)return true;
     if(activeP.role==="parent")return true;
@@ -716,11 +724,12 @@ function renderToday(){
     else fi.forEach(function(f){h+='<div class="task-row" onclick="togFocus(\''+f.id+'\')"><div class="tcheck'+(f.done?" done":"")+'"></div><span class="ttext'+(f.done?" done":"")+'">'+esc(f.title)+'</span><button class="del-btn" onclick="event.stopPropagation();delFocus(\''+f.id+'\')">x</button></div>';});
     h+='</div>';
   }
+  h+=renderTodoSection(activeP.id,activeP.color);
   var tasks=tasksFor(dk,null),choresHTML="";
-  choresHTML+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"📋 Chores")+'</span>';
+  choresHTML+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"🧹 Kids\' Chores")+'</span>';
   if(activeP.role==="parent")choresHTML+='<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>';
   choresHTML+='</div><div class="card red">';
-  if(!tasks.length)choresHTML+='<div class="empty">'+(isK?"No chores today! 🎉":"No chores - tap + Add.")+'</div>';
+  if(!tasks.length)choresHTML+='<div class="empty">'+(isK?"No chores today! 🎉":"No chores assigned - tap + Add.")+'</div>';
   else tasks.forEach(function(t){
     var done=isDone(t,dk);var ass=(t.assigneeIds||[]).map(function(id){return DATA.profiles.find(function(p){return p.id===id;});}).filter(Boolean);
     choresHTML+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span>';
@@ -775,6 +784,21 @@ function renderToday(){
 }
 function openListFromHome(id){aPage="lists";aListId=id;renderPage();renderNav();}
 
+// ── PERSONAL TO-DO LISTS (distinct from assigned Chores; every family member has their own) ──
+function todosFor(pid){return(DATA.todos||[]).filter(function(t){return t.profileId===pid;});}
+function addTodoItem(pid,inputId){var i=ge(inputId);if(!i)return;var v=i.value.trim();if(!v)return;DATA.todos=DATA.todos||[];DATA.todos.push({id:uid(),profileId:pid,text:v,done:false});i.value="";save();renderAll();}
+function togTodoItem(id){var t=(DATA.todos||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;save();renderAll();}
+function delTodoItem(id){DATA.todos=(DATA.todos||[]).filter(function(x){return x.id!==id;});save();renderAll();}
+function renderTodoSection(pid,color){
+  var items=todosFor(pid),inputId="todo-add-"+pid;
+  var h='<div class="sec-hdr"><span class="sec-label" style="background:'+color+'22;color:'+color+'">📝 To-Do List</span></div><div class="card" style="border-color:'+color+'33">';
+  if(!items.length)h+='<div class="empty">No to-dos yet - add one below.</div>';
+  else items.forEach(function(t){h+='<div class="task-row" onclick="togTodoItem(\''+t.id+'\')"><div class="tcheck'+(t.done?" done":"")+'"></div><span class="ttext'+(t.done?" done":"")+'">'+esc(t.text)+'</span><button class="del-btn" onclick="event.stopPropagation();delTodoItem(\''+t.id+'\')">x</button></div>';});
+  h+='<div class="add-row"><input class="add-inp" id="'+inputId+'" placeholder="Add a to-do..." onkeydown="if(event.key===\'Enter\')addTodoItem(\''+pid+'\',\''+inputId+'\')"><button class="add-btn" onclick="addTodoItem(\''+pid+'\',\''+inputId+'\')">Add</button></div>';
+  h+='</div>';
+  return h;
+}
+
 function togFocus(id){var f=(DATA.focusItems||[]).find(function(x){return x.id===id;});if(f){f.done=!f.done;save();renderToday();}}
 function delFocus(id){DATA.focusItems=(DATA.focusItems||[]).filter(function(x){return x.id!==id;});save();renderToday();}
 function togWater(dk,n){if(!DATA.water)DATA.water={};DATA.water[dk]=((DATA.water[dk]||0)===n)?n-1:n;save();renderToday();}
@@ -788,18 +812,27 @@ function renderFamily(){
   var dk=tk(),dt=new Date(),h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">👪 Family</h2>';
   var allEvts=evOn(dt);
   (DATA.profiles||[]).forEach(function(p){
-    var tasks=(DATA.tasks||[]).filter(function(t){
-      var ok=false;if(!t.repeat||t.repeat==="none")ok=t.date===dk;else if(t.repeat==="daily")ok=t.date<=dk;else if(t.repeat==="weekly"){var o=new Date(t.date+"T00:00:00"),tg=new Date(dk+"T00:00:00");if(tg>=o)ok=Math.round((tg-o)/86400000)%7===0;}else if(t.repeat==="weekdays"){var o2=new Date(t.date+"T00:00:00"),tg2=new Date(dk+"T00:00:00");if(tg2>=o2){var dw=tg2.getDay();ok=dw>=1&&dw<=5;}}
-      return ok&&(t.assigneeIds||[]).indexOf(p.id)>=0;
-    });
-    var done=tasks.filter(function(t){return isDoneFor(t,dk,p.id);}).length,pct=tasks.length?Math.round(done/tasks.length*100):0;
-    var pevts=allEvts.filter(function(ev){return ev.person===p.name;});
+    var isKid=p.role!=="parent";
     var avh=p.photo?('<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'):av(p);
-    h+='<div class="fam-card"><div class="fc-top"><div class="fc-av" style="background:'+p.color+'22;border:2px solid '+p.color+'44">'+avh+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:10px;color:var(--muted)">'+(p.role==="parent"?"Parent":"Child")+' · '+done+'/'+tasks.length+' done</div></div><div style="text-align:right"><div style="font-size:21px;font-weight:700;color:'+p.color+'">'+pct+'%</div>'+(pct===100&&tasks.length?'<div>🌟</div>':'')+'</div></div>';
-    h+='<div class="fc-prog"><div class="fc-fill" style="width:'+pct+'%;background:'+p.color+'"></div></div>';
-    h+='<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px">To-do</div>';
-    if(!tasks.length)h+='<div class="empty" style="padding:.5rem 0">No chores today.</div>';
-    else tasks.forEach(function(t){var tdone=isDoneFor(t,dk,p.id);h+='<div class="task-row" onclick="togTaskFor(\''+t.id+'\',\''+dk+'\',\''+p.id+'\')"><div class="tcheck'+(tdone?" done":"")+'"></div><span class="ttext'+(tdone?" done":"")+'">'+esc(t.title)+'</span></div>';});
+    var pevts=allEvts.filter(function(ev){return ev.person===p.name;});
+    h+='<div class="fam-card"><div class="fc-top"><div class="fc-av" style="background:'+p.color+'22;border:2px solid '+p.color+'44">'+avh+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:10px;color:var(--muted)">'+(p.role==="parent"?"Parent":"Child")+'</div></div></div>';
+    if(isKid){
+      var tasks=(DATA.tasks||[]).filter(function(t){
+        var ok=taskRepeatsOn(t,dk);
+        return ok&&(t.assigneeIds||[]).indexOf(p.id)>=0;
+      });
+      var done=tasks.filter(function(t){return isDoneFor(t,dk,p.id);}).length,pct=tasks.length?Math.round(done/tasks.length*100):0;
+      h+='<div style="display:flex;align-items:center;gap:8px;margin:.4rem 0 .2rem"><div style="flex:1;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">🧹 Chores · '+done+'/'+tasks.length+' done</div><div style="font-size:15px;font-weight:700;color:'+p.color+'">'+pct+'%'+(pct===100&&tasks.length?' 🌟':'')+'</div></div>';
+      h+='<div class="fc-prog"><div class="fc-fill" style="width:'+pct+'%;background:'+p.color+'"></div></div>';
+      h+='<div style="margin-top:10px">';
+      if(!tasks.length)h+='<div class="empty" style="padding:.5rem 0">No chores today.</div>';
+      else tasks.forEach(function(t){var tdone=isDoneFor(t,dk,p.id);h+='<div class="task-row" onclick="togTaskFor(\''+t.id+'\',\''+dk+'\',\''+p.id+'\')"><div class="tcheck'+(tdone?" done":"")+'"></div><span class="ttext'+(tdone?" done":"")+'">'+esc(t.title)+'</span></div>';});
+      h+='</div>';
+    }
+    var todos=todosFor(p.id),tdone2=todos.filter(function(t){return t.done;}).length;
+    h+='<div style="margin-top:10px"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px">📝 To-Do List'+(todos.length?' · '+tdone2+'/'+todos.length+' done':'')+'</div>';
+    if(!todos.length)h+='<div class="empty" style="padding:.5rem 0">No to-dos yet.</div>';
+    else todos.forEach(function(t){h+='<div class="task-row" onclick="togTodoItem(\''+t.id+'\')"><div class="tcheck'+(t.done?" done":"")+'"></div><span class="ttext'+(t.done?" done":"")+'">'+esc(t.text)+'</span></div>';});
     h+='</div>';
     h+='<div style="margin-top:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px">Today\'s events</div>';
     if(!pevts.length)h+='<div class="empty" style="padding:.5rem 0">No events today.</div>';
@@ -971,10 +1004,10 @@ function openModal(id){ge(id).classList.add("open");}
 function closeModal(id){ge(id).classList.remove("open");}
 document.querySelectorAll(".modal").forEach(function(m){m.addEventListener("click",function(e){if(e.target===m)m.classList.remove("open");});});
 
-function bldChips(cid,sids){ge(cid).innerHTML=(DATA.profiles||[]).map(function(p){var s=(sids||[]).indexOf(p.id)>=0;return'<span class="achip'+(s?' sel':'')+'" data-id="'+p.id+'" style="background:'+p.color+'22;color:'+p.color+'" onclick="this.classList.toggle(\'sel\')">'+av(p)+' '+esc(p.name)+'</span>';}).join("");}
+function bldChips(cid,sids,kidsOnly){ge(cid).innerHTML=(DATA.profiles||[]).filter(function(p){return !kidsOnly||p.role!=="parent";}).map(function(p){var s=(sids||[]).indexOf(p.id)>=0;return'<span class="achip'+(s?' sel':'')+'" data-id="'+p.id+'" style="background:'+p.color+'22;color:'+p.color+'" onclick="this.classList.toggle(\'sel\')">'+av(p)+' '+esc(p.name)+'</span>';}).join("");}
 function gChips(cid){return[...ge(cid).querySelectorAll(".achip.sel")].map(function(c){return c.dataset.id;});}
 
-function openTaskM(dk){ge("tm-title").value="";ge("tm-date").value=dk||tk();ge("tm-repeat").value="none";bldChips("tm-chips",[]);openModal("m-task");setTimeout(function(){ge("tm-title").focus();},100);}
+function openTaskM(dk){ge("tm-title").value="";ge("tm-date").value=dk||tk();ge("tm-repeat").value="none";bldChips("tm-chips",[],true);openModal("m-task");setTimeout(function(){ge("tm-title").focus();},100);}
 ge("tm-save").addEventListener("click",function(){var t=ge("tm-title").value.trim();if(!t)return;DATA.tasks=DATA.tasks||[];DATA.tasks.push({id:uid(),title:t,date:ge("tm-date").value||tk(),repeat:ge("tm-repeat").value,assigneeIds:gChips("tm-chips"),done:{}});save();closeModal("m-task");renderAll();});
 ge("tm-title").addEventListener("keydown",function(e){if(e.key==="Enter")ge("tm-save").click();});
 
@@ -1116,6 +1149,43 @@ ge("ec-desc").addEventListener("keydown",function(e){if(e.key==="Enter")ge("ec-s
 // ── URL RECIPE FETCH ──
 function irShowResult(parsed){ge("ire").style.display="none";ge("ir-loading").style.display="none";ge("irn").value=parsed.title||"";ge("iri").value=fmtBullets(parsed.ingredients);ge("irmd").value=fmtNumbered(parsed.method);ge("irr").style.display="block";ge("irsb").style.display="block";}
 function irShowErr(msg){ge("ir-loading").style.display="none";ge("ire").textContent=msg;ge("ire").style.display="block";}
+function fetchWithTimeout(url,ms,opts){
+  var ctrl=new AbortController();
+  var t=setTimeout(function(){ctrl.abort();},ms);
+  return fetch(url,Object.assign({signal:ctrl.signal},opts||{})).finally(function(){clearTimeout(t);});
+}
+async function tryDirectFetch(url){
+  try{
+    var r=await fetchWithTimeout(url,4000,{mode:"cors"});
+    var t=await r.text();
+    if(t&&t.length>500)return{html:t,isHtml:true};
+  }catch(e){}
+  return null;
+}
+function proxyAttempts(url){
+  return[
+    {isHtml:true,run:function(){return fetchWithTimeout("https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(url),7000).then(function(r){return r.text();});}},
+    {isHtml:true,run:function(){return fetchWithTimeout("https://api.allorigins.win/raw?url="+encodeURIComponent(url),7000).then(function(r){return r.text();});}},
+    {isHtml:true,run:function(){return fetchWithTimeout("https://corsproxy.io/?url="+encodeURIComponent(url),7000).then(function(r){return r.text();});}},
+    {isHtml:false,run:function(){return fetchWithTimeout("https://r.jina.ai/"+url,7000).then(function(r){return r.text();});}}
+  ];
+}
+async function fetchRecipeHtml(url){
+  var direct=await tryDirectFetch(url);
+  if(direct)return direct;
+  var atts=proxyAttempts(url);
+  var results=await Promise.allSettled(atts.map(function(a){
+    return a.run().then(function(html){return(html&&html.length>500)?{html:html,isHtml:a.isHtml}:null;}).catch(function(){return null;});
+  }));
+  var htmlHit=null,anyHit=null;
+  results.forEach(function(res){
+    if(res.status==="fulfilled"&&res.value){
+      if(res.value.isHtml&&!htmlHit)htmlHit=res.value;
+      if(!anyHit)anyHit=res.value;
+    }
+  });
+  return htmlHit||anyHit||null;
+}
 function findRecipeNode(node){
   if(!node||typeof node!=="object")return null;
   if(Array.isArray(node)){for(var i=0;i<node.length;i++){var f=findRecipeNode(node[i]);if(f)return f;}return null;}
@@ -1124,55 +1194,46 @@ function findRecipeNode(node){
   if(node["@graph"]){var g=findRecipeNode(node["@graph"]);if(g)return g;}
   return null;
 }
-async function fetchViaProxy(url){
-  var attempts=[
-    function(){return fetch("https://api.allorigins.win/get?url="+encodeURIComponent(url)).then(function(r){return r.json();}).then(function(d){return d&&d.contents?d.contents:null;});},
-    function(){return fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(url)).then(function(r){return r.text();});},
-    function(){return fetch("https://corsproxy.io/?url="+encodeURIComponent(url)).then(function(r){return r.text();});},
-    function(){return fetch("https://thingproxy.freeboard.io/fetch/"+url).then(function(r){return r.text();});},
-    function(){return fetch("https://r.jina.ai/"+url).then(function(r){return r.text();});}
-  ];
-  for(var i=0;i<attempts.length;i++){
-    try{var html=await attempts[i]();if(html&&html.length>200)return html;}catch(e){}
-  }
-  return null;
-}
 async function fetchRecipeUrl(){
   var url=ge("irurl").value.trim();if(!url){irShowErr("Please enter a URL.");return;}
   if(!/^https?:\/\//i.test(url))url="https://"+url;
+  ge("ir-loading").textContent="Fetching recipe... (this can take up to 10 seconds)";
   ge("ir-loading").style.display="block";ge("ire").style.display="none";ge("irr").style.display="none";
   try{
-    var html=await fetchViaProxy(url);
-    if(!html){irShowErr("Could not fetch that page. Try copying the recipe text and pasting it below instead.");return;}
-    var blocks=html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)||[];
-    for(var i=0;i<blocks.length;i++){
-      try{
-        var inner=blocks[i].replace(/^<script[^>]*>/i,"").replace(/<\/script>\s*$/i,"").trim();
-        var obj=JSON.parse(inner);
-        var r=findRecipeNode(obj);
-        if(r&&r.recipeIngredient&&r.recipeIngredient.length){
-          var ings=r.recipeIngredient||[];
-          var steps=[];
-          if(r.recipeInstructions){
-            var raw=r.recipeInstructions;
-            var flat=[];
-            (function flatten(node){
-              if(Array.isArray(node)){node.forEach(flatten);return;}
-              if(typeof node==="string"){flat.push(node);return;}
-              if(node&&typeof node==="object"){
-                if(node["@type"]==="HowToSection"&&node.itemListElement)return flatten(node.itemListElement);
-                flat.push(node.text||node.name||"");
-              }
-            })(raw);
-            steps=flat.map(function(s){return String(s).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();}).filter(Boolean);
+    var res=await fetchRecipeHtml(url);
+    if(!res){irShowErr("Could not fetch that page. Try copying the recipe text and pasting it below instead.");return;}
+    var html=res.html;
+    if(res.isHtml){
+      var blocks=html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)||[];
+      for(var i=0;i<blocks.length;i++){
+        try{
+          var inner=blocks[i].replace(/^<script[^>]*>/i,"").replace(/<\/script>\s*$/i,"").trim();
+          var obj=JSON.parse(inner);
+          var r=findRecipeNode(obj);
+          if(r&&r.recipeIngredient&&r.recipeIngredient.length){
+            var ings=r.recipeIngredient||[];
+            var steps=[];
+            if(r.recipeInstructions){
+              var raw=r.recipeInstructions;
+              var flat=[];
+              (function flatten(node){
+                if(Array.isArray(node)){node.forEach(flatten);return;}
+                if(typeof node==="string"){flat.push(node);return;}
+                if(node&&typeof node==="object"){
+                  if(node["@type"]==="HowToSection"&&node.itemListElement)return flatten(node.itemListElement);
+                  flat.push(node.text||node.name||"");
+                }
+              })(raw);
+              steps=flat.map(function(s){return String(s).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();}).filter(Boolean);
+            }
+            ge("ir-loading").style.display="none";
+            irShowResult({title:r.name||"Recipe",ingredients:ings,method:steps});
+            return;
           }
-          ge("ir-loading").style.display="none";
-          irShowResult({title:r.name||"Recipe",ingredients:ings,method:steps});
-          return;
-        }
-      }catch(e){}
+        }catch(e){}
+      }
     }
-    var txt=html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&#8217;|&rsquo;/g,"'").replace(/\s+/g," ");
+    var txt=res.isHtml?html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&#8217;|&rsquo;/g,"'").replace(/\s+/g," "):html;
     var p=prec(txt);ge("ir-loading").style.display="none";
     if(p.error)irShowErr("Could not automatically find the recipe on that page. Try copying the ingredients and using Paste text instead.");
     else irShowResult(p);
