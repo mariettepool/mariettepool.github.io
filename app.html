@@ -286,11 +286,12 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 </div></div>
 
 <div class="modal" id="m-event"><div class="mbox">
-  <div class="mhandle"></div><div class="mtitle">Add Event</div>
+  <div class="mhandle"></div><div class="mtitle" id="em-title-h">Add Event</div>
   <div class="mf"><label class="ml">Title</label><input class="mi" id="em-title" type="text" placeholder="e.g. Hockey practice"></div>
   <div class="m2"><div class="mf"><label class="ml">Date</label><input class="mi" id="em-date" type="date"></div><div class="mf"><label class="ml">Time</label><input class="mi" id="em-time" type="time"></div></div>
   <div class="mf"><label class="ml">Who is this for?</label><div class="achips" id="em-chips"></div></div>
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-event')">Cancel</button><button class="msave" id="em-save">Add</button></div>
+  <button class="mdanger" id="em-delete" style="display:none">Delete event</button>
 </div></div>
 
 <div class="modal" id="m-list-item"><div class="mbox">
@@ -660,7 +661,7 @@ function fetchFamCal(){
       var ad=!!(ev.start&&ev.start.date);
       var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
       var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
-      return{start:s,end:e,allDay:ad,name:ev.summary||"Untitled"};
+      return{id:ev.id,start:s,end:e,allDay:ad,name:ev.summary||"Untitled"};
     });
     renderAll();
   }).catch(function(){});
@@ -680,6 +681,26 @@ function evCol(ev){
     if(cat)return cat.color;
   }
   return ev.person?pc(ev.person):"#000";
+}
+function myTodayEvents(dt){
+  var dk=dkey(dt);
+  var ae=(DATA.appEvents||[]).filter(function(e){
+    if(e.date!==dk)return false;
+    if(!activeP||activeP.role==="parent")return true;
+    return(e.assigneeIds||[]).indexOf(activeP.id)>=0;
+  }).map(function(e){
+    var aids=e.assigneeIds||[];
+    var ps=(aids.length&&aids.length<(DATA.profiles||[]).length)?DATA.profiles.find(function(x){return aids.indexOf(x.id)>=0;}):null;
+    return{start:new Date(dk+"T"+(e.time||"00:00")+":00"),end:new Date(dk+"T23:59:00"),allDay:!e.time,person:ps?ps.name:null,assigneeIds:aids,name:e.title,isApp:true,id:e.id};
+  });
+  var src=calToken?calEvts:(famCalToken?famCalEvts:[]);
+  var y=dt.getFullYear(),mo=dt.getMonth(),da=dt.getDate(),d=new Date(y,mo,da);
+  var gc=(src||[]).filter(function(ev){
+    var s=new Date(ev.start.getFullYear(),ev.start.getMonth(),ev.start.getDate());
+    var ee=new Date(ev.end.getFullYear(),ev.end.getMonth(),ev.end.getDate());
+    return ev.allDay?(d>=s&&d<ee):d.getTime()===s.getTime();
+  });
+  return gc.concat(ae).sort(function(a,b){return a.allDay&&!b.allDay?-1:!a.allDay&&b.allDay?1:a.start-b.start;});
 }
 function evOn(dt){
   var y=dt.getFullYear(),mo=dt.getMonth(),da=dt.getDate(),d=new Date(y,mo,da);
@@ -765,7 +786,7 @@ function calcSc(){
   return{pct:Math.round(done/all.length*100),members:(DATA.profiles||[]).map(function(p){var pt=all.filter(function(t){return(t.assigneeIds||[]).indexOf(p.id)>=0;});var pd=pt.filter(function(t){return isDoneFor(t,dk,p.id);}).length;return{name:p.name,color:p.color,pct:pt.length?Math.round(pd/pt.length*100):0,done:pd,total:pt.length};}).filter(function(m){return m.total>0;})};
 }
 
-function launch(){ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage="today";renderAll();tryCal();tryFamCal();}
+function launch(){ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage="family";renderAll();tryCal();tryFamCal();}
 function renderAll(){if(!activeP)return;renderTB();renderSB();renderNav();renderPage();}
 function renderPage(){
   document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});
@@ -800,7 +821,7 @@ function renderSB(){
 
 function renderNav(){
   var ip=activeP&&activeP.role==="parent";
-  var pages=ip?[{id:"today",icon:"🏠",lbl:"Today"},{id:"family",icon:"👪",lbl:"Family"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"},{id:"meals",icon:"🍽",lbl:"Meals"},{id:"settings",icon:"⚙",lbl:"Settings"}]:[{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"}];
+  var pages=ip?[{id:"family",icon:"👪",lbl:"Family"},{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"},{id:"meals",icon:"🍽",lbl:"Meals"},{id:"settings",icon:"⚙",lbl:"Settings"}]:[{id:"family",icon:"👪",lbl:"Family"},{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"}];
   ge("bnav").innerHTML=pages.map(function(p){var active=aPage===p.id;return'<button class="bn'+(active?" active":"")+'" onclick="goPage(\''+p.id+'\')" style="'+(active?"color:"+activeP.color:"")+'"><span class="bn-icon">'+p.icon+'</span><span class="bn-label">'+esc(p.lbl)+'</span></button>';}).join("");
 }
 
@@ -822,27 +843,21 @@ function renderToday(){
     h+='</div>';
   }
   h+=renderTodoSection(activeP.id,activeP.color);
-  var tasks=tasksFor(dk,null),choresHTML="";
-  choresHTML+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">'+(isK?"✅ My Chores":"🧹 Kids\' Chores")+'</span>';
-  if(activeP.role==="parent")choresHTML+='<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>';
-  choresHTML+='</div><div class="card red">';
-  if(!tasks.length)choresHTML+='<div class="empty">'+(isK?"No chores today! 🎉":"No chores assigned - tap + Add.")+'</div>';
-  else tasks.forEach(function(t){
-    var done=isDone(t,dk);var ass=(t.assigneeIds||[]).map(function(id){return DATA.profiles.find(function(p){return p.id===id;});}).filter(Boolean);
-    choresHTML+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span>';
-    choresHTML+='<div style="display:flex;gap:3px">'+ass.map(function(a){return'<span style="width:20px;height:20px;border-radius:50%;background:'+a.color+'22;border:1.5px solid '+a.color+'44;font-size:11px;display:flex;align-items:center;justify-content:center">'+av(a)+'</span>';}).join("")+'</div>';
-    if(activeP.role==="parent")choresHTML+='<button class="del-btn" onclick="event.stopPropagation();delTask(\''+t.id+'\')">x</button>';
-    choresHTML+='</div>';
-  });
-  choresHTML+='</div>';
-  var evts=evOn(dt),showE=isK?evts.filter(function(e){return e.isApp;}):evts;
+  if(isK){
+    var mytasks=tasksFor(dk,activeP.id);
+    h+='<div class="sec-hdr"><span class="sec-label" style="background:'+activeP.color+'22;color:'+activeP.color+'">✅ My Chores</span></div><div class="card red">';
+    if(!mytasks.length)h+='<div class="empty">No chores today! 🎉</div>';
+    else mytasks.forEach(function(t){var done=isDone(t,dk);h+='<div class="task-row" onclick="togTask(\''+t.id+'\',\''+dk+'\')"><div class="tcheck'+(done?" done":"")+'"></div><span class="ttext'+(done?" done":"")+'">'+esc(t.title)+'</span></div>';});
+    h+='</div>';
+  }
+  var evts=myTodayEvents(dt);
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue);cursor:pointer" onclick="goPage(\'calendar\')" title="View monthly calendar">📅 Events today ›</span>';
   if(!isK)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openEventM(\''+dk+'\')">+ Add</button>';
   h+='</div><div class="card blue">';
-  if(!showE.length)h+='<div class="empty">No events today.'+((!calToken&&!isK)?' Connect calendar in Settings.':"")+'</div>';
-  else showE.forEach(function(ev){
+  if(!evts.length)h+='<div class="empty">No events today.'+((!calToken&&!famCalToken)?' Connect a calendar in Settings.':"")+'</div>';
+  else evts.forEach(function(ev){
     var col=evCol(ev);
-    h+='<div class="ev-row" style="cursor:pointer" onclick="goPage(\'calendar\')"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
+    h+='<div class="ev-row" style="cursor:pointer" onclick="'+(ev.isApp&&!isK?"openEditEvent('"+ev.id+"')":"goPage('calendar')")+'"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
     if(ev.person){var ep=(DATA.profiles||[]).find(function(x){return x.name===ev.person;});h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+(ep&&ep.photo?'<img src="'+ep.photo+'" style="width:12px;height:12px;border-radius:50%;object-fit:cover;margin-right:2px;vertical-align:middle">':'')+esc(ev.person)+'</span>';}
     if(!ev.isApp&&(DATA.calCategories||[]).length){
       h+='<select onclick="event.stopPropagation()" onchange="event.stopPropagation();setEvCat(\''+ev.id+'\',this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;margin-right:4px;max-width:90px">';
@@ -850,39 +865,26 @@ function renderToday(){
       (DATA.calCategories||[]).forEach(function(c){var csel=DATA.calEventCats&&DATA.calEventCats[ev.id]===c.id;h+='<option value="'+c.id+'"'+(csel?' selected':'')+'>'+esc(c.name)+'</option>';});
       h+='</select>';
     }
-    if(ev.isApp&&activeP.role==="parent")h+='<button class="del-btn" onclick="event.stopPropagation();delAE(\''+ev.id+'\')">x</button>';
     h+='</div>';
   });
   h+='</div>';
   if(!isK){
-    var tm=(DATA.meals||{})[dk];
-    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">🍽 Tonight\'s dinner</span><button class="mini-btn" style="color:var(--mustard-text);border-color:var(--mustard)" onclick="openMealM(\''+dk+'\')">Edit</button></div>';
-    h+='<div class="card mustard" style="padding:.875rem 1rem">'+(tm?'<span style="font-size:15px;font-weight:500">'+esc(tm)+'</span>':'<span style="font-size:13px;color:var(--muted);font-style:italic">No dinner planned - tap Edit.</span>')+'</div>';
-    var ps=(DATA.shoppingList||[]).filter(function(s){return !s.done;});
-    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--green-bg);color:var(--green)">🛒 Grocery list</span><button class="mini-btn" style="color:var(--green);border-color:var(--green)" onclick="goPage(\'meals\')">View all</button></div>';
-    h+='<div class="card green">';
-    if(!ps.length)h+='<div class="empty" style="padding:.875rem">Grocery list is clear.</div>';
-    else ps.slice(0,5).forEach(function(s){var ri=(DATA.shoppingList||[]).findIndex(function(x){return x.id===s.id;});h+='<div class="shop-row"><div class="shop-cb" onclick="togShopT('+ri+')"></div><span class="shop-text">'+esc(s.text)+'</span><button class="del-btn" onclick="delShopT('+ri+')">x</button></div>';});
-    if(ps.length>5)h+='<div style="padding:.5rem 1rem;font-size:11px;color:var(--muted)">+'+(ps.length-5)+' more</div>';
-    h+='<div class="add-row"><input class="add-inp" id="qshop" placeholder="Add item..."><button class="add-btn" onclick="qAddShop()">Add</button></div></div>';
-    var lsts=DATA.lists||[];
-    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--charcoal-bg);color:var(--charcoal)">🗒 My Lists</span><button class="mini-btn" style="color:var(--charcoal);border-color:var(--border)" onclick="openNL()">+ New</button></div>';
-    h+='<div class="card">';
-    if(!lsts.length)h+='<div class="empty">No lists yet - tap + New to add one.</div>';
-    else lsts.forEach(function(l){
-      var items=l.items||[],dcx=items.filter(function(it){return ldv(l.id,it.id,dk);}).length;
-      var cnt=l.type==="notes"?(items.length+' item'+(items.length!==1?'s':'')):(dcx+'/'+items.length);
-      h+='<div class="task-row" onclick="openListFromHome(\''+l.id+'\')" style="cursor:pointer"><span style="font-size:16px;margin-right:8px">'+(l.icon||'📋')+'</span><span class="ttext" style="flex:1">'+esc(l.name)+'</span><span style="font-size:11px;color:var(--muted)">'+cnt+'</span></div>';
-    });
-    h+='</div>';
     var gl=(DATA.water||{})[dk]||0;
     h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--water-bg);color:var(--blue)">💧 Water today</span><span style="font-size:11px;color:var(--muted)">'+gl+'/8 glasses</span></div>';
     h+='<div class="card blue" style="padding:.875rem 1rem"><div style="display:flex;gap:6px;flex-wrap:wrap">';
     for(var gi=0;gi<8;gi++)h+='<div class="water-glass'+(gi<gl?" on":"")+'" onclick="togWater(\''+dk+'\','+(gi+1)+')">💧</div>';
     h+='</div></div>';
   }
-  h+=choresHTML;
-  h+=renderEarningChores(isK);
+  var lsts=DATA.lists||[];
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--charcoal-bg);color:var(--charcoal)">🗒 My Lists</span><button class="mini-btn" style="color:var(--charcoal);border-color:var(--border)" onclick="openNL()">+ New</button></div>';
+  h+='<div class="card">';
+  if(!lsts.length)h+='<div class="empty">No lists yet - tap + New to add one.</div>';
+  else lsts.forEach(function(l){
+    var items=l.items||[],dcx=items.filter(function(it){return ldv(l.id,it.id,dk);}).length;
+    var cnt=l.type==="notes"?(items.length+' item'+(items.length!==1?'s':'')):(dcx+'/'+items.length);
+    h+='<div class="task-row" onclick="openListFromHome(\''+l.id+'\')" style="cursor:pointer"><span style="font-size:16px;margin-right:8px">'+(l.icon||'📋')+'</span><span class="ttext" style="flex:1">'+esc(l.name)+'</span><span style="font-size:11px;color:var(--muted)">'+cnt+'</span></div>';
+  });
+  h+='</div>';
   pg.innerHTML=h;
 }
 function openListFromHome(id){aPage="lists";aListId=id;renderPage();renderNav();}
@@ -904,6 +906,10 @@ function renderTodoSection(pid,color){
 }
 
 function togFocus(id){var f=(DATA.focusItems||[]).find(function(x){return x.id===id;});if(f){f.done=!f.done;save();renderToday();}}
+
+function famTodoAdd(){var i=ge("famtodo-add");if(!i)return;var v=i.value.trim();if(!v)return;DATA.familyTodos=DATA.familyTodos||[];DATA.familyTodos.push({id:uid(),text:v,done:false});i.value="";save();renderAll();}
+function famTodoTog(id){var t=(DATA.familyTodos||[]).find(function(x){return x.id===id;});if(!t)return;t.done=!t.done;save();renderAll();}
+function famTodoDel(id){DATA.familyTodos=(DATA.familyTodos||[]).filter(function(x){return x.id!==id;});save();renderAll();}
 function delFocus(id){DATA.focusItems=(DATA.focusItems||[]).filter(function(x){return x.id!==id;});save();renderToday();}
 function togWater(dk,n){if(!DATA.water)DATA.water={};DATA.water[dk]=((DATA.water[dk]||0)===n)?n-1:n;save();renderToday();}
 function qAddShop(){var i=ge("qshop");if(!i)return;var v=i.value.trim();if(!v)return;if(!DATA.shoppingList)DATA.shoppingList=[];DATA.shoppingList.push({id:uid(),text:v,done:false});i.value="";save();renderToday();}
@@ -913,48 +919,48 @@ function delAE(id){DATA.appEvents=(DATA.appEvents||[]).filter(function(x){return
 function delTask(id){DATA.tasks=(DATA.tasks||[]).filter(function(x){return x.id!==id;});save();renderAll();}
 
 function renderFamily(){
-  var dk=tk(),dt=new Date(),h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">👪 Family</h2>';
+  var dk=tk(),dt=new Date(),isPar=activeP.role==="parent",h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">👪 '+esc(DATA.familyName||"Family")+'</h2>';
+
+  var ftodos=DATA.familyTodos||[];
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--red-bg);color:var(--red)">📝 Family To-Do List</span></div><div class="card red">';
+  if(!ftodos.length)h+='<div class="empty">No family to-dos yet - add one below.</div>';
+  else ftodos.forEach(function(t){h+='<div class="task-row" onclick="famTodoTog(\''+t.id+'\')"><div class="tcheck'+(t.done?" done":"")+'"></div><span class="ttext'+(t.done?" done":"")+'">'+esc(t.text)+'</span><button class="del-btn" onclick="event.stopPropagation();famTodoDel(\''+t.id+'\')">x</button></div>';});
+  h+='<div class="add-row"><input class="add-inp" id="famtodo-add" placeholder="Add something for the family..." onkeydown="if(event.key===\'Enter\')famTodoAdd()"><button class="add-btn" onclick="famTodoAdd()">Add</button></div></div>';
+
   var famEvts=famEvOn(dt);
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 Family Calendar</span></div><div class="card blue">';
-  if(!famCalToken)h+='<div class="empty">No family calendar connected.'+(activeP.role==="parent"?' Connect one in Settings.':'')+'</div>';
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 Family Calendar</span><button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="goPage(\'calendar\')">View month</button></div><div class="card blue">';
+  if(!famCalToken)h+='<div class="empty">No family calendar connected.'+(isPar?' Connect one in Settings.':'')+'</div>';
   else if(!famEvts.length)h+='<div class="empty">No family events today.</div>';
   else famEvts.forEach(function(ev){h+='<div class="ev-row"><div class="ev-dot" style="background:#000"></div><span class="ev-name">'+esc(ev.name)+'</span></div>';});
   h+='</div>';
-  var allEvts=evOn(dt);
-  (DATA.profiles||[]).forEach(function(p){
-    var isKid=p.role!=="parent";
+
+  var tm=(DATA.meals||{})[dk];
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">🍽 Tonight\'s dinner</span>'+(isPar?'<button class="mini-btn" style="color:var(--mustard-text);border-color:var(--mustard)" onclick="openMealM(\''+dk+'\')">Edit</button>':'')+'</div>';
+  h+='<div class="card mustard" style="padding:.875rem 1rem">'+(tm?'<span style="font-size:15px;font-weight:500">'+esc(tm)+'</span>':'<span style="font-size:13px;color:var(--muted);font-style:italic">No dinner planned yet.</span>')+'</div>';
+
+  var ps=(DATA.shoppingList||[]).filter(function(s){return !s.done;});
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--green-bg);color:var(--green)">🛒 Grocery list</span><button class="mini-btn" style="color:var(--green);border-color:var(--green)" onclick="goPage(\'meals\')">View all</button></div><div class="card green">';
+  if(!ps.length)h+='<div class="empty" style="padding:.875rem">Grocery list is clear.</div>';
+  else ps.slice(0,5).forEach(function(s){var ri=(DATA.shoppingList||[]).findIndex(function(x){return x.id===s.id;});h+='<div class="shop-row"><div class="shop-cb" onclick="togShopT('+ri+')"></div><span class="shop-text">'+esc(s.text)+'</span>'+(isPar?'<button class="del-btn" onclick="delShopT('+ri+')">x</button>':'')+'</div>';});
+  if(ps.length>5)h+='<div style="padding:.5rem 1rem;font-size:11px;color:var(--muted)">+'+(ps.length-5)+' more</div>';
+  h+='<div class="add-row"><input class="add-inp" id="qshop" placeholder="Add item..."><button class="add-btn" onclick="qAddShop()">Add</button></div></div>';
+
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--red-bg);color:var(--red)">🧹 Kids\' Chores</span>'+(isPar?'<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>':'')+'</div>';
+  var kids=(DATA.profiles||[]).filter(function(p){return p.role!=="parent";});
+  if(!kids.length)h+='<div class="card"><div class="empty">No kids added yet.</div></div>';
+  kids.forEach(function(p){
     var avh=p.photo?('<img src="'+p.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'):av(p);
-    var pevts=allEvts.filter(function(ev){return ev.isApp?(ev.assigneeIds||[]).indexOf(p.id)>=0:ev.person===p.name;});
-    h+='<div class="fam-card"><div class="fc-top"><div class="fc-av" style="background:'+p.color+'22;border:2px solid '+p.color+'44">'+avh+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:10px;color:var(--muted)">'+(p.role==="parent"?"Parent":"Child")+'</div></div></div>';
-    if(isKid){
-      var tasks=(DATA.tasks||[]).filter(function(t){
-        var ok=taskRepeatsOn(t,dk);
-        return ok&&(t.assigneeIds||[]).indexOf(p.id)>=0;
-      });
-      var done=tasks.filter(function(t){return isDoneFor(t,dk,p.id);}).length,pct=tasks.length?Math.round(done/tasks.length*100):0;
-      h+='<div style="display:flex;align-items:center;gap:8px;margin:.4rem 0 .2rem"><div style="flex:1;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">🧹 Chores · '+done+'/'+tasks.length+' done</div><div style="font-size:15px;font-weight:700;color:'+p.color+'">'+pct+'%'+(pct===100&&tasks.length?' 🌟':'')+'</div></div>';
-      h+='<div class="fc-prog"><div class="fc-fill" style="width:'+pct+'%;background:'+p.color+'"></div></div>';
-      h+='<div style="margin-top:10px">';
-      if(!tasks.length)h+='<div class="empty" style="padding:.5rem 0">No chores today.</div>';
-      else tasks.forEach(function(t){var tdone=isDoneFor(t,dk,p.id);h+='<div class="task-row" onclick="togTaskFor(\''+t.id+'\',\''+dk+'\',\''+p.id+'\')"><div class="tcheck'+(tdone?" done":"")+'"></div><span class="ttext'+(tdone?" done":"")+'">'+esc(t.title)+'</span></div>';});
-      h+='</div>';
-    }
-    var todos=isKid?todosFor(p.id):todosDueBy(p.id,dk),tdone2=todos.filter(function(t){return t.done;}).length,tpct=todos.length?Math.round(tdone2/todos.length*100):0;
+    var tasks=(DATA.tasks||[]).filter(function(t){return taskRepeatsOn(t,dk)&&(t.assigneeIds||[]).indexOf(p.id)>=0;});
+    var done=tasks.filter(function(t){return isDoneFor(t,dk,p.id);}).length,pct=tasks.length?Math.round(done/tasks.length*100):0;
+    h+='<div class="fam-card"><div class="fc-top"><div class="fc-av" style="background:'+p.color+'22;border:2px solid '+p.color+'44">'+avh+'</div><div style="flex:1"><div style="font-size:15px;font-weight:600">'+esc(p.name)+'</div><div style="font-size:10px;color:var(--muted)">'+done+'/'+tasks.length+' done</div></div><div style="font-size:18px;font-weight:700;color:'+p.color+'">'+pct+'%'+(pct===100&&tasks.length?' 🌟':'')+'</div></div>';
+    h+='<div class="fc-prog"><div class="fc-fill" style="width:'+pct+'%;background:'+p.color+'"></div></div>';
     h+='<div style="margin-top:10px">';
-    if(!isKid){
-      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:.3rem"><div style="flex:1;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">📝 To-Do List · '+tdone2+'/'+todos.length+' done</div><div style="font-size:15px;font-weight:700;color:'+p.color+'">'+tpct+'%'+(tpct===100&&todos.length?' 🌟':'')+'</div></div>';
-      h+='<div class="fc-prog" style="margin-bottom:8px"><div class="fc-fill" style="width:'+tpct+'%;background:'+p.color+'"></div></div>';
-    }else h+='<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px">📝 To-Do List'+(todos.length?' · '+tdone2+'/'+todos.length+' done':'')+'</div>';
-    if(!todos.length)h+='<div class="empty" style="padding:.5rem 0">No to-dos yet.</div>';
-    else todos.forEach(function(t){h+='<div class="task-row" onclick="togTodoItem(\''+t.id+'\')"><div class="tcheck'+(t.done?" done":"")+'"></div><span class="ttext'+(t.done?" done":"")+'">'+esc(t.text)+'</span></div>';});
-    h+='</div>';
-    h+='<div style="margin-top:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px">Today\'s events</div>';
-    if(!pevts.length)h+='<div class="empty" style="padding:.5rem 0">No events today.</div>';
-    else pevts.forEach(function(ev){h+='<div class="ev-row"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+p.color+';background:transparent':'background:'+p.color)+'"></div><span class="ev-name">'+esc(ev.name)+'</span></div>';});
-    h+='</div>';
-    h+='</div>';
+    if(!tasks.length)h+='<div class="empty" style="padding:.5rem 0">No chores today.</div>';
+    else tasks.forEach(function(t){var tdone=isDoneFor(t,dk,p.id);h+='<div class="task-row" onclick="togTaskFor(\''+t.id+'\',\''+dk+'\',\''+p.id+'\')"><div class="tcheck'+(tdone?" done":"")+'"></div><span class="ttext'+(tdone?" done":"")+'">'+esc(t.title)+'</span></div>';});
+    h+='</div></div>';
   });
-  h+='<button onclick="openTaskM(\''+dk+'\')" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px dashed var(--border);background:transparent;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-top:.25rem">+ Assign a chore</button>';
+
+  h+=renderEarningChores(!isPar);
   ge("page-family").innerHTML=h;
 }
 function togTaskFor(id,dk,pid){
@@ -1146,8 +1152,20 @@ function openFocusM(){ge("fm-title").value="";openModal("m-focus");setTimeout(fu
 ge("fm-save").addEventListener("click",function(){var t=ge("fm-title").value.trim();if(!t)return;DATA.focusItems=DATA.focusItems||[];DATA.focusItems.push({id:uid(),profileId:activeP.id,title:t,date:tk(),done:false});save();closeModal("m-focus");renderToday();});
 ge("fm-title").addEventListener("keydown",function(e){if(e.key==="Enter")ge("fm-save").click();});
 
-function openEventM(dk){ge("em-title").value="";ge("em-date").value=dk||tk();ge("em-time").value="";bldChips("em-chips",[]);openModal("m-event");setTimeout(function(){ge("em-title").focus();},100);}
-ge("em-save").addEventListener("click",function(){var t=ge("em-title").value.trim(),d=ge("em-date").value;if(!t||!d)return;DATA.appEvents=DATA.appEvents||[];DATA.appEvents.push({id:uid(),title:t,date:d,time:ge("em-time").value,assigneeIds:gChips("em-chips")});save();closeModal("m-event");renderAll();});
+var editEid=null;
+function openEventM(dk){editEid=null;ge("em-title-h").textContent="Add Event";ge("em-title").value="";ge("em-date").value=dk||tk();ge("em-time").value="";bldChips("em-chips",[]);ge("em-delete").style.display="none";openModal("m-event");setTimeout(function(){ge("em-title").focus();},100);}
+function openEditEvent(id){
+  var e=(DATA.appEvents||[]).find(function(x){return x.id===id;});if(!e)return;
+  editEid=id;ge("em-title-h").textContent="Edit Event";ge("em-title").value=e.title||"";ge("em-date").value=e.date||tk();ge("em-time").value=e.time||"";bldChips("em-chips",e.assigneeIds||[]);ge("em-delete").style.display="block";openModal("m-event");
+}
+ge("em-save").addEventListener("click",function(){
+  var t=ge("em-title").value.trim(),d=ge("em-date").value;if(!t||!d)return;
+  DATA.appEvents=DATA.appEvents||[];
+  if(editEid){var idx=DATA.appEvents.findIndex(function(x){return x.id===editEid;});if(idx>=0)DATA.appEvents[idx]={id:editEid,title:t,date:d,time:ge("em-time").value,assigneeIds:gChips("em-chips")};}
+  else DATA.appEvents.push({id:uid(),title:t,date:d,time:ge("em-time").value,assigneeIds:gChips("em-chips")});
+  save();closeModal("m-event");renderAll();
+});
+ge("em-delete").addEventListener("click",function(){if(!editEid)return;delAE(editEid);closeModal("m-event");});
 
 function openALI(lid){addLid=lid;var l=(DATA.lists||[]).find(function(x){return x.id===lid;});ge("li-title").textContent="Add item to "+(l?l.name:"List");ge("li-name").value="";openModal("m-list-item");setTimeout(function(){ge("li-name").focus();},100);}
 ge("li-save").addEventListener("click",function(){var n=ge("li-name").value.trim();if(!n||!addLid)return;var l=(DATA.lists||[]).find(function(x){return x.id===addLid;});if(l){if(!l.items)l.items=[];l.items.push({id:uid(),name:n});}save();closeModal("m-list-item");addLid=null;renderLists();});
@@ -1190,9 +1208,18 @@ function openIR(){
   m.addEventListener("click",function(e){if(e.target===m)m.remove();});
 }
 function prec(text){
-  var ls=text.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);if(!ls.length)return{error:"No text found."};
-  var title=ls[0],ips=[/^\d[\d\/]*\s*(cup|tbsp|tsp|ml|g|kg|l|oz|lb|piece|slice|clove|can|tin|bunch|handful|pinch|packet)/i,/^\d[\d\/]*\s+[a-z]/i,/^[•\-\*]\s+/],meta=/^(prep|cook|total|serv|yield|makes|nutrition|calorie|course|cuisine)\b/i;
+  var raw=text.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+  var junk=/^(print( recipe)?|pin( it)?|share|rate this recipe|jump to recipe|jump to video|save recipe|save to|subscribe|follow us|advertisement|sponsored|related posts?|you (might|may) also like|leave a (comment|reply|review)|\d+\s*(comments?|reviews?)|see more|read more|skip to (content|recipe)|posted (on|by)|last updated|updated on|share this|email this|★+\s*$)/i;
+  var urlLine=/^https?:\/\//i;
+  var ls=raw.filter(function(l){return !junk.test(l)&&!urlLine.test(l)&&l.length<200;});
+  if(!ls.length)return{error:"No text found."};
   var methodHdr=/^(instructions?|method|directions?|steps?|preparation)\b.{0,15}:?\s*$/i,ingredHdr=/^ingredients?\b.{0,25}:?\s*$/i;
+  var title=ls[0];
+  for(var ti=0;ti<Math.min(ls.length,8);ti++){
+    var cand=ls[ti];
+    if(cand.length>=4&&cand.length<=90&&!ingredHdr.test(cand)&&!methodHdr.test(cand)&&!/^\d/.test(cand)){title=cand;break;}
+  }
+  var ips=[/^\d[\d\/]*\s*(cup|tbsp|tsp|ml|g|kg|l|oz|lb|piece|slice|clove|can|tin|bunch|handful|pinch|packet)/i,/^\d[\d\/]*\s+[a-z]/i,/^[•\-\*]\s+/],meta=/^(prep|cook|total|serv|yield|makes|nutrition|calorie|course|cuisine)\b/i;
   var mode="",ings=[],steps=[];
   ls.forEach(function(l,i){
     if(ingredHdr.test(l)){mode="ing";return;}
