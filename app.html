@@ -155,6 +155,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 .eopt{height:36px;border-radius:8px;border:2px solid var(--border);background:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .eopt.sel{border-color:var(--red);background:var(--red-bg);}
 .cgrid{display:flex;gap:7px;flex-wrap:wrap;margin:.4rem 0;}
+summary::-webkit-details-marker{display:none;}
 .copt{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;}
 .copt.sel{border-color:#2F2F2F;transform:scale(1.2);}
 .sug-box{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:200px;overflow-y:auto;margin-top:4px;}
@@ -177,7 +178,24 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
     <img src="logo.png" alt="SP" style="width:90px;height:90px;object-fit:contain;margin:0 auto 1rem;display:block">
     <h1 style="font-family:'Lora',serif;font-size:22px;font-weight:400;color:var(--red);margin-bottom:.2rem">StickyPaper</h1>
     <p style="font-size:10px;color:var(--mustard-text);text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin-bottom:1.25rem">Family Planner</p>
-    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1.75rem">The family management app that keeps everyone organised.</p>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1rem">The family management app that keeps everyone organised.</p>
+    <details style="text-align:left;margin-bottom:1.25rem;border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <summary style="cursor:pointer;padding:.7rem .9rem;font-size:12.5px;font-weight:700;color:var(--red);list-style:none;display:flex;align-items:center;justify-content:space-between">See everything StickyPaper can do <span style="font-size:11px;color:var(--muted);font-weight:500">tap to expand ▾</span></summary>
+      <div style="padding:0 .9rem .9rem;font-size:12px;color:var(--muted);line-height:1.7">
+        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">👪 Family home page</p>
+        <p style="margin:0">A shared family to-do list, today's family events, tonight's dinner, the grocery list, kids' chores and earning-chore rewards - all in one place everyone can see.</p>
+        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">🏠 Everyone's own Today page</p>
+        <p style="margin:0">Personal to-do list, daily focus, water tracker, your own calendar events, and any personal lists you add - just for you. Kids get a simplified view with their own chores, to-do list and events.</p>
+        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">📅 Real, editable calendars</p>
+        <p style="margin:0">Connect your own personal calendar and/or one shared family calendar. Add, edit and delete real events from the app, and colour-code them by category (birthdays, work, social, and more).</p>
+        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">🍽 Meals &amp; recipes</p>
+        <p style="margin:0">Plan dinners, manage a shared grocery list, and import recipes straight from a link or pasted text - title, ingredients and method extracted automatically, or just save the link if it can't be.</p>
+        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">📋 Flexible lists</p>
+        <p style="margin:0">Create tick lists, weekly grids, or free-form notes - and choose whether each one shows on your own page or the whole family's.</p>
+        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">👨‍👩‍👧 One planner, multiple sign-ins</p>
+        <p style="margin:0">Both parents can each sign in with their own account (Google or email) and share the exact same family planner using a family code.</p>
+      </div>
+    </details>
     <div style="background:var(--blue-bg);border-radius:var(--radius);padding:.7rem .9rem;margin-bottom:1.25rem;text-align:left"><p style="font-size:11.5px;color:var(--blue);line-height:1.5;margin:0">👪 <b>Sharing one planner between two parents?</b> Each person signs in with their own account below, then enters the family's shared code (found in Settings) to join the same planner.</p></div>
     <button class="google-btn" id="btn-signin">
       <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
@@ -786,7 +804,7 @@ function myTodayEvents(dt){
   var dk=dkey(dt);
   var ae=(DATA.appEvents||[]).filter(function(e){
     if(e.date!==dk)return false;
-    if(!activeP||activeP.role==="parent")return true;
+    if(!activeP)return true;
     return(e.assigneeIds||[]).indexOf(activeP.id)>=0;
   }).map(function(e){
     var aids=e.assigneeIds||[];
@@ -886,7 +904,7 @@ function calcSc(){
   return{pct:Math.round(done/all.length*100),members:(DATA.profiles||[]).map(function(p){var pt=all.filter(function(t){return(t.assigneeIds||[]).indexOf(p.id)>=0;});var pd=pt.filter(function(t){return isDoneFor(t,dk,p.id);}).length;return{name:p.name,color:p.color,pct:pt.length?Math.round(pd/pt.length*100):0,done:pd,total:pt.length};}).filter(function(m){return m.total>0;})};
 }
 
-function launch(){ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage="family";renderAll();tryCal();tryFamCal();}
+function launch(){ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage=(activeP&&activeP.role!=="parent")?"today":"family";renderAll();tryCal();tryFamCal();}
 function renderAll(){if(!activeP)return;renderTB();renderSB();renderNav();renderPage();}
 function renderPage(){
   document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});
@@ -921,7 +939,7 @@ function renderSB(){
 
 function renderNav(){
   var ip=activeP&&activeP.role==="parent";
-  var pages=ip?[{id:"family",icon:"👪",lbl:"Family"},{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"},{id:"meals",icon:"🍽",lbl:"Meals"},{id:"settings",icon:"⚙",lbl:"Settings"}]:[{id:"family",icon:"👪",lbl:"Family"},{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"}];
+  var pages=ip?[{id:"family",icon:"👪",lbl:"Family"},{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"},{id:"lists",icon:"📋",lbl:"Lists"},{id:"meals",icon:"🍽",lbl:"Meals"},{id:"settings",icon:"⚙",lbl:"Settings"}]:[{id:"today",icon:"🏠",lbl:"Today"},{id:"calendar",icon:"📅",lbl:"Calendar"}];
   ge("bnav").innerHTML=pages.map(function(p){var active=aPage===p.id;return'<button class="bn'+(active?" active":"")+'" onclick="goPage(\''+p.id+'\')" style="'+(active?"color:"+activeP.color:"")+'"><span class="bn-icon">'+p.icon+'</span><span class="bn-label">'+esc(p.lbl)+'</span></button>';}).join("");
 }
 
@@ -1100,37 +1118,75 @@ function togTaskFor(id,dk,pid){
   t.done[k]=!t.done[k];save();renderFamily();
 }
 
+var kidFamView=false;
 function renderCalendar(){
-  var dt=dd(aDay),dk=dkey(dt),isK=activeP.role!=="parent";
+  var isK=activeP.role!=="parent";
+  if(isK){renderKidCalendar();return;}
+  var dt=dd(aDay),dk=dkey(dt);
   var h='<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem 0;margin-bottom:.5rem"><button onclick="calPrev()" style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:14px">‹</button><span style="font-size:12px;font-weight:600;color:var(--muted)">'+wCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="calNext()" style="width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:14px">›</button></div>';
   h+='<div class="cal-strip">';
   for(var i=0;i<7;i++){var d=dd(i),has=evOn(d).length>0;h+='<div class="cal-day'+(i===aDay?" active":"")+'" onclick="setDay('+i+')"><div class="cdb-name">'+DAYS[i]+'</div><div class="cdb-num">'+d.getDate()+'</div>'+(has?'<div style="width:4px;height:4px;border-radius:50%;background:'+(i===aDay?"#fff":"var(--red)")+';margin:2px auto 0"></div>':'<div style="height:6px"></div>')+'</div>';}
   h+='</div>';
-  var evts=evOn(dt),showE=isK?evts.filter(function(e){return e.isApp;}):evts;
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 '+dt.toLocaleDateString([],{weekday:"long",day:"numeric",month:"short"})+'</span>';
-  if(!isK)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openEventM(\''+dk+'\')">+ Add</button>';
-  h+='</div><div class="card blue">';
-  if(!showE.length)h+='<div class="empty">No events on this day.</div>';
-  else showE.forEach(function(ev){
+  var evts=evOn(dt);
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 '+dt.toLocaleDateString([],{weekday:"long",day:"numeric",month:"short"})+'</span><button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openEventM(\''+dk+'\')">+ Add</button></div><div class="card blue">';
+  if(!evts.length)h+='<div class="empty">No events on this day.</div>';
+  else evts.forEach(function(ev){
     var col=evCol(ev);
     h+='<div class="ev-row"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
     if(!ev.allDay)h+='<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>';
     if(ev.person){var ep=(DATA.profiles||[]).find(function(x){return x.name===ev.person;});h+='<span class="ev-tag" style="background:'+col+'22;color:'+col+'">'+(ep&&ep.photo?'<img src="'+ep.photo+'" style="width:12px;height:12px;border-radius:50%;object-fit:cover;margin-right:2px;vertical-align:middle">':'')+esc(ev.person)+'</span>';}
-    if(ev.isApp&&activeP.role==="parent")h+='<button class="del-btn" onclick="delAE(\''+ev.id+'\')">x</button>';
+    if(ev.isApp)h+='<button class="del-btn" onclick="delAE(\''+ev.id+'\')">x</button>';
     h+='</div>';
   });
   h+='</div>';
-  if(!isK){
+  var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.875rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
+  h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
+  for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=evOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");var cds=dkey(cd);h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'" onclick="jmpDate(\''+cds+'\')">'+'<div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
+  h+='</div>';
+  var ppl=[...new Set(calEvts.map(function(e){return e.person;}).filter(Boolean))];
+  if(ppl.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.625rem 0;font-size:11px;color:var(--muted)">'+ppl.map(function(n){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:'+pc(n)+';display:inline-block"></span>'+esc(n)+'</span>';}).join('')+'</div>';
+  ge("page-calendar").innerHTML=h;
+}
+function renderKidCalendar(){
+  var h='';
+  if(kidFamView){
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem"><button onclick="toggleKidFamView(false)" style="padding:8px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer">‹ Back</button><h2 style="font-family:\'Lora\',serif;font-size:19px;font-weight:400;margin:0">👪 Family Calendar</h2></div>';
+    var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.5rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
+    if(!famCalToken)h+='<div class="empty">No family calendar connected yet.</div>';
+    else{
+      h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
+      for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=famEvOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'"><div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
+      h+='</div>';
+    }
+  }else{
+    h+='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">📅 My Calendar</h2>';
+    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">This week</span></div><div class="card blue">';
+    var today=new Date();today.setHours(0,0,0,0);var any=false;
+    for(var i=0;i<7;i++){
+      var d=new Date(today);d.setDate(d.getDate()+i);
+      var devts=evOn(d).filter(function(e){return e.isApp;});
+      if(!devts.length)continue;
+      any=true;
+      h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
+      devts.forEach(function(ev){
+        var col=evCol(ev);
+        h+='<div class="ev-row"><div class="ev-dot" style="border:2px solid '+col+';background:transparent"></div><span class="ev-name">'+esc(ev.name)+'</span>'+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+'</div>';
+      });
+    }
+    if(!any)h+='<div class="empty">No events this week.</div>';
+    h+='</div>';
     var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
     h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.875rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
     h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
-    for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=evOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");var cds=dkey(cd);h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'" onclick="jmpDate(\''+cds+'\')">'+'<div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
+    for(var ci2=0;ci2<42;ci2++){var cd2=new Date(gs);cd2.setDate(gs.getDate()+ci2);var inM2=cd2.getMonth()===mo,isT2=cd2.getTime()===td.getTime();var cevts2=evOn(cd2).filter(function(e){return e.isApp;});var clbls2=cevts2.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM2?"":" om")+(isT2?" today":"")+'"><div class="mc-date">'+cd2.getDate()+'</div>'+clbls2+(cevts2.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts2.length-3)+'</div>':'')+'</div>';}
     h+='</div>';
-    var ppl=[...new Set(calEvts.map(function(e){return e.person;}).filter(Boolean))];
-    if(ppl.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.625rem 0;font-size:11px;color:var(--muted)">'+ppl.map(function(n){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:'+pc(n)+';display:inline-block"></span>'+esc(n)+'</span>';}).join('')+'</div>';
+    h+='<button onclick="toggleKidFamView(true)" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px dashed var(--border);background:transparent;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-top:.75rem">👪 See the Family Calendar</button>';
   }
   ge("page-calendar").innerHTML=h;
 }
+function toggleKidFamView(v){kidFamView=v;renderCalendar();}
 function calPrev(){wCur.setDate(wCur.getDate()-7);renderCalendar();}
 function calNext(){wCur.setDate(wCur.getDate()+7);renderCalendar();}
 function setDay(i){aDay=i;renderCalendar();}
