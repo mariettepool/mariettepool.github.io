@@ -155,7 +155,6 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 .eopt{height:36px;border-radius:8px;border:2px solid var(--border);background:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .eopt.sel{border-color:var(--red);background:var(--red-bg);}
 .cgrid{display:flex;gap:7px;flex-wrap:wrap;margin:.4rem 0;}
-summary::-webkit-details-marker{display:none;}
 .copt{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;}
 .copt.sel{border-color:#2F2F2F;transform:scale(1.2);}
 .sug-box{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:200px;overflow-y:auto;margin-top:4px;}
@@ -178,24 +177,15 @@ summary::-webkit-details-marker{display:none;}
     <img src="logo.png" alt="SP" style="width:90px;height:90px;object-fit:contain;margin:0 auto 1rem;display:block">
     <h1 style="font-family:'Lora',serif;font-size:22px;font-weight:400;color:var(--red);margin-bottom:.2rem">StickyPaper</h1>
     <p style="font-size:10px;color:var(--mustard-text);text-transform:uppercase;letter-spacing:.1em;font-weight:600;margin-bottom:1.25rem">Family Planner</p>
-    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1rem">The family management app that keeps everyone organised.</p>
-    <details style="text-align:left;margin-bottom:1.25rem;border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
-      <summary style="cursor:pointer;padding:.7rem .9rem;font-size:12.5px;font-weight:700;color:var(--red);list-style:none;display:flex;align-items:center;justify-content:space-between">See everything StickyPaper can do <span style="font-size:11px;color:var(--muted);font-weight:500">tap to expand ▾</span></summary>
-      <div style="padding:0 .9rem .9rem;font-size:12px;color:var(--muted);line-height:1.7">
-        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">👪 Family home page</p>
-        <p style="margin:0">A shared family to-do list, today's family events, tonight's dinner, the grocery list, kids' chores and earning-chore rewards - all in one place everyone can see.</p>
-        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">🏠 Everyone's own Today page</p>
-        <p style="margin:0">Personal to-do list, daily focus, water tracker, your own calendar events, and any personal lists you add - just for you. Kids get a simplified view with their own chores, to-do list and events.</p>
-        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">📅 Real, editable calendars</p>
-        <p style="margin:0">Connect your own personal calendar and/or one shared family calendar. Add, edit and delete real events from the app, and colour-code them by category (birthdays, work, social, and more).</p>
-        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">🍽 Meals &amp; recipes</p>
-        <p style="margin:0">Plan dinners, manage a shared grocery list, and import recipes straight from a link or pasted text - title, ingredients and method extracted automatically, or just save the link if it can't be.</p>
-        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">📋 Flexible lists</p>
-        <p style="margin:0">Create tick lists, weekly grids, or free-form notes - and choose whether each one shows on your own page or the whole family's.</p>
-        <p style="margin:.6rem 0 .2rem;font-weight:700;color:var(--charcoal)">👨‍👩‍👧 One planner, multiple sign-ins</p>
-        <p style="margin:0">Both parents can each sign in with their own account (Google or email) and share the exact same family planner using a family code.</p>
-      </div>
-    </details>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:1rem">The family management app that keeps everyone organised - a shared family home page, everyone's own personal Today page, real editable calendars, recipes, and flexible lists.</p>
+    <div style="text-align:left;margin-bottom:1.25rem;border:1.5px solid var(--border);border-radius:var(--radius);padding:.85rem .9rem;font-size:11.5px;color:var(--muted);line-height:1.55">
+      <p style="margin:0 0 .5rem"><b style="color:var(--charcoal)">👪 Family home page</b> - shared to-do list, today's family events, tonight's dinner, grocery list, kids' chores &amp; earning-chore rewards.</p>
+      <p style="margin:0 0 .5rem"><b style="color:var(--charcoal)">🏠 Your own Today page</b> - personal to-do list, daily focus, water tracker, your own calendar events, and any lists just for you.</p>
+      <p style="margin:0 0 .5rem"><b style="color:var(--charcoal)">📅 Real, editable calendars</b> - connect your own calendar and/or one shared family calendar, add/edit/delete real events, colour-code by category.</p>
+      <p style="margin:0 0 .5rem"><b style="color:var(--charcoal)">🍽 Meals &amp; recipes</b> - plan dinners, manage the grocery list, and import recipes from a link or pasted text.</p>
+      <p style="margin:0 0 .5rem"><b style="color:var(--charcoal)">📋 Flexible lists</b> - tick lists, weekly grids, or notes, shown on your page or the whole family's.</p>
+      <p style="margin:0"><b style="color:var(--charcoal)">👨‍👩‍👧 One planner, multiple sign-ins</b> - both parents can sign in separately and share the same planner with a family code.</p>
+    </div>
     <div style="background:var(--blue-bg);border-radius:var(--radius);padding:.7rem .9rem;margin-bottom:1.25rem;text-align:left"><p style="font-size:11.5px;color:var(--blue);line-height:1.5;margin:0">👪 <b>Sharing one planner between two parents?</b> Each person signs in with their own account below, then enters the family's shared code (found in Settings) to join the same planner.</p></div>
     <button class="google-btn" id="btn-signin">
       <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
@@ -713,7 +703,7 @@ function initFamTC(){
   if(famTokenClient)return;
   famTokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user){famCalToken=r.access_token;localStorage.setItem("fct_"+user.uid,famCalToken);fetchFamCal();if(aPage==="settings")renderSettings();}}});
 }
-function conFamCal(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:""});else{initFamTC();setTimeout(function(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:""});},500);}}
+function conFamCal(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:"select_account"});else{initFamTC();setTimeout(function(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:"select_account"});},500);}}
 function disFamCal(){famCalToken=null;famCalEvts=[];if(user)localStorage.removeItem("fct_"+user.uid);renderSettings();renderAll();}
 function fetchFamCal(){
   if(!famCalToken)return;
@@ -728,7 +718,8 @@ function fetchFamCal(){
       var ad=!!(ev.start&&ev.start.date);
       var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
       var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
-      return{id:ev.id,start:s,end:e,allDay:ad,name:ev.summary||"Untitled"};
+      var m=(ev.summary||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
+      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
     });
     renderAll();
   }).catch(function(){});
@@ -1066,7 +1057,7 @@ function renderFamily(){
   var famEvts=famEvOn(dt);
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 Family Calendar</span><div style="display:flex;gap:5px">';
   if(isPar&&famCalToken)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openAddCalEvent(\'family\',\''+dk+'\')">+ Add</button>';
-  h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="goPage(\'calendar\')">View month</button></div></div><div class="card blue">';
+  h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="showFamCalMonth()">View month</button></div></div><div class="card blue">';
   if(!famCalToken)h+='<div class="empty">No family calendar connected.'+(isPar?' Connect one in Settings.':'')+'</div>';
   else if(!famEvts.length)h+='<div class="empty">No family events today.</div>';
   else famEvts.forEach(function(ev){
@@ -1120,6 +1111,7 @@ function togTaskFor(id,dk,pid){
 
 var kidFamView=false;
 function renderCalendar(){
+  if(kidFamView){renderFamCalMonth();return;}
   var isK=activeP.role!=="parent";
   if(isK){renderKidCalendar();return;}
   var dt=dd(aDay),dk=dkey(dt);
@@ -1148,45 +1140,52 @@ function renderCalendar(){
   if(ppl.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.625rem 0;font-size:11px;color:var(--muted)">'+ppl.map(function(n){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:'+pc(n)+';display:inline-block"></span>'+esc(n)+'</span>';}).join('')+'</div>';
   ge("page-calendar").innerHTML=h;
 }
-function renderKidCalendar(){
-  var h='';
-  if(kidFamView){
-    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem"><button onclick="toggleKidFamView(false)" style="padding:8px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer">‹ Back</button><h2 style="font-family:\'Lora\',serif;font-size:19px;font-weight:400;margin:0">👪 Family Calendar</h2></div>';
-    var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.5rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
-    if(!famCalToken)h+='<div class="empty">No family calendar connected yet.</div>';
-    else{
-      h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
-      for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=famEvOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'"><div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
-      h+='</div>';
-    }
-  }else{
-    h+='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">📅 My Calendar</h2>';
-    h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">This week</span></div><div class="card blue">';
-    var today=new Date();today.setHours(0,0,0,0);var any=false;
-    for(var i=0;i<7;i++){
-      var d=new Date(today);d.setDate(d.getDate()+i);
-      var devts=evOn(d).filter(function(e){return e.isApp;});
-      if(!devts.length)continue;
-      any=true;
-      h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
-      devts.forEach(function(ev){
-        var col=evCol(ev);
-        h+='<div class="ev-row"><div class="ev-dot" style="border:2px solid '+col+';background:transparent"></div><span class="ev-name">'+esc(ev.name)+'</span>'+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+'</div>';
-      });
-    }
-    if(!any)h+='<div class="empty">No events this week.</div>';
-    h+='</div>';
-    var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.875rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
+function renderFamCalMonth(){
+  var isPar=activeP.role==="parent";
+  var h='<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">';
+  if(!isPar)h+='<button onclick="toggleKidFamView(false)" style="padding:8px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer">‹ Back</button>';
+  h+='<h2 style="font-family:\'Lora\',serif;font-size:19px;font-weight:400;margin:0">👪 Family Calendar</h2>';
+  if(isPar)h+='<button onclick="toggleKidFamView(false)" style="margin-left:auto;padding:8px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer">‹ Back</button>';
+  h+='</div>';
+  var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.5rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
+  if(isPar)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue);margin-bottom:.5rem" onclick="openAddCalEvent(\'family\',\''+tk()+'\')">+ Add</button>';
+  if(!famCalToken)h+='<div class="empty">No family calendar connected yet.</div>';
+  else{
     h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
-    for(var ci2=0;ci2<42;ci2++){var cd2=new Date(gs);cd2.setDate(gs.getDate()+ci2);var inM2=cd2.getMonth()===mo,isT2=cd2.getTime()===td.getTime();var cevts2=evOn(cd2).filter(function(e){return e.isApp;});var clbls2=cevts2.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM2?"":" om")+(isT2?" today":"")+'"><div class="mc-date">'+cd2.getDate()+'</div>'+clbls2+(cevts2.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts2.length-3)+'</div>':'')+'</div>';}
+    for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=famEvOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'"><div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
     h+='</div>';
-    h+='<button onclick="toggleKidFamView(true)" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px dashed var(--border);background:transparent;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-top:.75rem">👪 See the Family Calendar</button>';
   }
   ge("page-calendar").innerHTML=h;
 }
+function renderKidCalendar(){
+  var h='';
+  h+='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">📅 My Calendar</h2>';
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">This week</span></div><div class="card blue">';
+  var today=new Date();today.setHours(0,0,0,0);var any=false;
+  for(var i=0;i<7;i++){
+    var d=new Date(today);d.setDate(d.getDate()+i);
+    var devts=evOn(d).filter(function(e){return e.isApp;}).concat(famEvOn(d).filter(function(e){return e.person===activeP.name;}));
+    if(!devts.length)continue;
+    any=true;
+    h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
+    devts.forEach(function(ev){
+      var col=evCol(ev);
+      h+='<div class="ev-row"><div class="ev-dot" style="border:2px solid '+col+';background:transparent"></div><span class="ev-name">'+esc(ev.name)+'</span>'+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+'</div>';
+    });
+  }
+  if(!any)h+='<div class="empty">No events this week.</div>';
+  h+='</div>';
+  var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.875rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
+  h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
+  for(var ci2=0;ci2<42;ci2++){var cd2=new Date(gs);cd2.setDate(gs.getDate()+ci2);var inM2=cd2.getMonth()===mo,isT2=cd2.getTime()===td.getTime();var cevts2=evOn(cd2).filter(function(e){return e.isApp;}).concat(famEvOn(cd2).filter(function(e){return e.person===activeP.name;}));var clbls2=cevts2.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM2?"":" om")+(isT2?" today":"")+'"><div class="mc-date">'+cd2.getDate()+'</div>'+clbls2+(cevts2.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts2.length-3)+'</div>':'')+'</div>';}
+  h+='</div>';
+  h+='<button onclick="toggleKidFamView(true)" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px dashed var(--border);background:transparent;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-top:.75rem">👪 See the Family Calendar</button>';
+  ge("page-calendar").innerHTML=h;
+}
 function toggleKidFamView(v){kidFamView=v;renderCalendar();}
+function showFamCalMonth(){kidFamView=true;goPage("calendar");}
 function calPrev(){wCur.setDate(wCur.getDate()-7);renderCalendar();}
 function calNext(){wCur.setDate(wCur.getDate()+7);renderCalendar();}
 function setDay(i){aDay=i;renderCalendar();}
@@ -1320,7 +1319,7 @@ h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radiu
   ge("fni").addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
-function conCal(){if(tokenClient)tokenClient.requestAccessToken({prompt:""});else{initTC();setTimeout(function(){if(tokenClient)tokenClient.requestAccessToken({prompt:""});},500);}}
+function conCal(){if(tokenClient)tokenClient.requestAccessToken({prompt:"select_account"});else{initTC();setTimeout(function(){if(tokenClient)tokenClient.requestAccessToken({prompt:"select_account"});},500);}}
 function disCal(){var k=user&&activeP?"ct_"+user.uid+"_"+activeP.id:null;calToken=null;calEvts=[];if(k)localStorage.removeItem(k);renderSettings();renderAll();}
 
 function openModal(id){ge(id).classList.add("open");}
@@ -1385,19 +1384,28 @@ ge("rm-delete").addEventListener("click",function(){if(!eRid||!confirm("Delete r
 
 function openIR(){
   var m=document.createElement("div");m.className="modal open";m.id="mir";
-  m.innerHTML='<div class="mbox"><div class="mhandle"></div><div class="mtitle">Import Recipe</div><div class="mf"><label class="ml">Paste a recipe URL</label><div style="display:flex;gap:6px"><input class="mi" id="irurl" type="url" placeholder="https://example.com/recipe" style="flex:1"><button class="msave" id="irfetch" style="width:auto;padding:0 16px">Fetch</button></div></div><div id="ir-loading" style="display:none;font-size:12px;color:var(--muted);margin-bottom:.5rem">Fetching recipe...</div><div style="display:flex;align-items:center;gap:8px;margin:.75rem 0;color:var(--muted);font-size:11px"><div style="flex:1;height:1px;background:var(--border)"></div>or paste text<div style="flex:1;height:1px;background:var(--border)"></div></div><div class="mf"><label class="ml">Paste recipe text</label><textarea class="mi" id="irt" rows="8" placeholder="Paste a recipe from a website, WhatsApp, or anywhere..." style="resize:vertical;line-height:1.6;font-size:13px"></textarea></div><div id="irr" style="display:none"><div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:var(--radius);padding:.875rem 1rem;margin-bottom:.875rem"><div style="font-size:11px;font-weight:700;color:var(--green-text);margin-bottom:.5rem">Recipe extracted - review and save</div><div class="mf"><label class="ml">Recipe name</label><input class="mi" id="irn" type="text"></div><div class="mf"><label class="ml">Ingredients</label><textarea class="mi" id="iri" rows="6" style="resize:vertical;line-height:1.6"></textarea></div><div class="mf"><label class="ml">Method</label><textarea class="mi" id="irmd" rows="6" style="resize:vertical;line-height:1.6"></textarea></div></div></div><div id="ire" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div><div class="mbtns"><button class="mcancel" onclick="document.getElementById(\'mir\').remove()">Cancel</button><button class="msave" id="ireb">Extract Recipe</button></div><button class="msave" id="irsb" style="display:none;margin-top:.5rem;background:var(--green)">Save Recipe</button><button class="msave" id="ir-linkonly" style="display:none;margin-top:.5rem;background:var(--charcoal)">Just save the link for now</button></div>';
+  m.innerHTML='<div class="mbox"><div class="mhandle"></div><div class="mtitle">Add Recipe</div>'
+    +'<div class="mf"><label class="ml">Recipe name</label><input class="mi" id="irn" type="text" placeholder="e.g. Chicken Curry"></div>'
+    +'<div class="mf"><label class="ml">Ingredients (one per line)</label><textarea class="mi" id="iri" rows="6" placeholder="Paste or type ingredients here, one per line" style="resize:vertical;line-height:1.6"></textarea></div>'
+    +'<div class="mf"><label class="ml">Method (one step per line)</label><textarea class="mi" id="irmd" rows="6" placeholder="Paste or type the steps here, one per line" style="resize:vertical;line-height:1.6"></textarea></div>'
+    +'<div class="mf"><label class="ml">Link (optional)</label><input class="mi" id="irurl" type="url" placeholder="https://example.com/recipe"></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin:.9rem 0;color:var(--muted);font-size:11px"><div style="flex:1;height:1px;background:var(--border)"></div>optional auto-fill helpers<div style="flex:1;height:1px;background:var(--border)"></div></div>'
+    +'<button class="msave" id="irfetch" style="width:100%;background:var(--blue);margin-bottom:.5rem">Try to auto-fill from the link above</button>'
+    +'<div id="ir-loading" style="display:none;font-size:12px;color:var(--muted);margin-bottom:.5rem">Trying to fetch that page... (can take up to 10 seconds, and won\'t always work)</div>'
+    +'<div class="mf"><label class="ml">Or paste messy recipe text here to auto-fill the fields above</label><textarea class="mi" id="irt" rows="4" placeholder="Paste a whole recipe page\'s text and we\'ll try to pull out the useful parts" style="resize:vertical;line-height:1.6;font-size:13px"></textarea></div>'
+    +'<button class="msave" id="ireb" style="width:100%;background:var(--charcoal);margin-bottom:.75rem">Try to auto-fill from that pasted text</button>'
+    +'<div id="ire" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>'
+    +'<div class="mbtns"><button class="mcancel" onclick="document.getElementById(\'mir\').remove()">Cancel</button><button class="msave" id="irsb" style="background:var(--green)">Save Recipe</button></div>'
+    +'</div>';
   document.body.appendChild(m);
   m.querySelector("#irfetch").addEventListener("click",fetchRecipeUrl);
-  m.querySelector("#irurl").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();fetchRecipeUrl();}});
-  m.querySelector("#ireb").addEventListener("click",function(){var text=ge("irt").value.trim();if(!text){ge("ire").textContent="Please paste some text.";ge("ire").style.display="block";return;}var p=prec(text);if(p.error){ge("ire").textContent=p.error;ge("ire").style.display="block";return;}irShowResult(p);});
-  m.querySelector("#irsb").addEventListener("click",function(){var t=ge("irn").value.trim();if(!t)return;var ing=parseListLines(ge("iri").value);var mtd=parseListLines(ge("irmd").value);var link=ge("irurl").value.trim();DATA.recipes=DATA.recipes||[];DATA.recipes.push({id:uid(),title:t,ingredients:ing,method:mtd,sourceUrl:link||null});save();m.remove();renderMeals();});
-  m.querySelector("#ir-linkonly").addEventListener("click",function(){
-    var link=ge("irurl").value.trim();if(!link){ge("ire").textContent="Please paste a URL first.";ge("ire").style.display="block";return;}
+  m.querySelector("#ireb").addEventListener("click",function(){var text=ge("irt").value.trim();if(!text){ge("ire").textContent="Please paste some text first.";ge("ire").style.display="block";return;}var p=prec(text);if(p.error){ge("ire").textContent=p.error;ge("ire").style.display="block";return;}irShowResult(p);});
+  m.querySelector("#irsb").addEventListener("click",function(){
     var t=ge("irn").value.trim();
-    if(!t){try{t="Recipe from "+new URL(/^https?:\/\//i.test(link)?link:"https://"+link).hostname.replace(/^www\./,"");}catch(e){t="Saved recipe link";}}
-    DATA.recipes=DATA.recipes||[];
-    DATA.recipes.push({id:uid(),title:t,ingredients:[],method:[],sourceUrl:link});
-    save();m.remove();renderMeals();
+    var link=ge("irurl").value.trim();
+    if(!t){if(link){try{t="Recipe from "+new URL(/^https?:\/\//i.test(link)?link:"https://"+link).hostname.replace(/^www\./,"");}catch(e){t="Saved recipe link";}}else{ge("ire").textContent="Please enter at least a recipe name.";ge("ire").style.display="block";return;}}
+    var ing=parseListLines(ge("iri").value);var mtd=parseListLines(ge("irmd").value);
+    DATA.recipes=DATA.recipes||[];DATA.recipes.push({id:uid(),title:t,ingredients:ing,method:mtd,sourceUrl:link||null});save();m.remove();renderMeals();
   });
   m.addEventListener("click",function(e){if(e.target===m)m.remove();});
 }
@@ -1540,8 +1548,8 @@ ge("gc-delete").addEventListener("click",function(){
 });
 
 // ── URL RECIPE FETCH ──
-function irShowResult(parsed){ge("ire").style.display="none";ge("ir-loading").style.display="none";ge("irn").value=parsed.title||"";ge("iri").value=fmtBullets(parsed.ingredients);ge("irmd").value=fmtNumbered(parsed.method);ge("irr").style.display="block";ge("irsb").style.display="block";var lo=ge("ir-linkonly");if(lo)lo.style.display="none";}
-function irShowErr(msg){ge("ir-loading").style.display="none";ge("ire").textContent=msg;ge("ire").style.display="block";var lo=ge("ir-linkonly");if(lo)lo.style.display="block";}
+function irShowResult(parsed){ge("ire").style.display="none";ge("ir-loading").style.display="none";ge("irn").value=parsed.title||"";ge("iri").value=fmtBullets(parsed.ingredients);ge("irmd").value=fmtNumbered(parsed.method);}
+function irShowErr(msg){ge("ir-loading").style.display="none";ge("ire").textContent=msg;ge("ire").style.display="block";}
 function fetchWithTimeout(url,ms,opts){
   var ctrl=new AbortController();
   var t=setTimeout(function(){ctrl.abort();},ms);
@@ -1609,10 +1617,10 @@ function extractStepsFromHtml(html){
   return out;
 }
 async function fetchRecipeUrl(){
-  var url=ge("irurl").value.trim();if(!url){irShowErr("Please enter a URL.");return;}
+  var url=ge("irurl").value.trim();if(!url){irShowErr("Please enter a link above first.");return;}
   if(!/^https?:\/\//i.test(url))url="https://"+url;
-  ge("ir-loading").textContent="Fetching recipe... (this can take up to 10 seconds)";
-  ge("ir-loading").style.display="block";ge("ire").style.display="none";ge("irr").style.display="none";
+  ge("ir-loading").textContent="Trying to fetch that page... (can take up to 10 seconds, and won't always work)";
+  ge("ir-loading").style.display="block";ge("ire").style.display="none";
   try{
     var res=await fetchRecipeHtml(url);
     if(!res){irShowErr("Could not fetch that page. Try copying the recipe text and pasting it below instead.");return;}
