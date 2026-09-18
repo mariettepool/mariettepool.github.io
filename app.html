@@ -412,6 +412,51 @@ function dkey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0
 function sow(d){var x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-(x.getDay()+6)%7);return x;}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function compressPhoto(dataUrl,cb){var img=new Image();img.onload=function(){var MAX=400,ratio=Math.min(MAX/img.width,MAX/img.height,1);var c=document.createElement("canvas");c.width=Math.round(img.width*ratio);c.height=Math.round(img.height*ratio);c.getContext("2d").drawImage(img,0,0,c.width,c.height);cb(c.toDataURL("image/jpeg",0.7));};img.src=dataUrl;}
+
+// ── PROFILE ADD/EDIT ──
+function bldPM(){ge("pm-colors").innerHTML=PCOLS.map(function(c){var s=(ge("pm-colors").dataset.sel||PCOLS[0])===c;return'<div class="copt'+(s?" sel":"")+'" onclick="selPC(\''+c+'\')" style="background:'+c+'"></div>';}).join("");}
+function selPC(c){ge("pm-colors").dataset.sel=c;bldPM();}
+function updatePmPreview(){var pv=ge("pm-photo-preview");if(pPhoto)pv.innerHTML='<img src="'+pPhoto+'" style="width:100%;height:100%;object-fit:cover">';else pv.textContent="photo";}
+function clearPhoto(){pPhoto=null;updatePmPreview();}
+function openAddProfile(){editPid=null;pPhoto=null;ge("pm-title").textContent="Add Family Member";ge("pm-name").value="";ge("pm-role").value="child";ge("pm-pin").value="";ge("pm-colors").dataset.sel=PCOLS[0];bldPM();updatePmPreview();ge("pm-delete").style.display="none";openModal("m-profile");}
+function openEditProfile(id){
+  var p=(DATA.profiles||[]).find(function(x){return x.id===id;});if(!p)return;
+  editPid=id;pPhoto=p.photo||null;
+  ge("pm-title").textContent="Edit "+p.name;ge("pm-name").value=p.name;ge("pm-role").value=p.role;ge("pm-pin").value=p.pin||"";
+  ge("pm-colors").dataset.sel=p.color||PCOLS[0];bldPM();updatePmPreview();
+  ge("pm-delete").style.display="block";openModal("m-profile");
+}
+ge("pm-photo-inp").addEventListener("change",function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){compressPhoto(r.result,function(comp){pPhoto=comp;updatePmPreview();});};
+  r.readAsDataURL(f);
+});
+ge("pm-save").addEventListener("click",function(){
+  var nm=ge("pm-name").value.trim();if(!nm)return;
+  var col=ge("pm-colors").dataset.sel||PCOLS[0],role=ge("pm-role").value,pin=ge("pm-pin").value.replace(/\D/g,"").slice(0,4);
+  var prof={name:nm,photo:pPhoto||null,color:col,role:role,pin:pin};
+  DATA.profiles=DATA.profiles||[];
+  if(editPid){var idx=DATA.profiles.findIndex(function(x){return x.id===editPid;});if(idx>=0)DATA.profiles[idx]=Object.assign({},DATA.profiles[idx],prof);}
+  else DATA.profiles.push(Object.assign({id:uid()},prof));
+  save();closeModal("m-profile");renderProfiles();if(aPage==="settings")renderSettings();
+});
+ge("pm-delete").addEventListener("click",function(){if(!editPid||!confirm("Remove this family member?"))return;DATA.profiles=(DATA.profiles||[]).filter(function(x){return x.id!==editPid;});save();closeModal("m-profile");renderProfiles();if(aPage==="settings")renderSettings();});
+
+// ── CALENDAR CATEGORY COLOR PICKER ──
+function selCC(c,el){var box=ge("cc-colors");if(box)box.dataset.sel=c;if(box)Array.prototype.forEach.call(box.children,function(x){x.classList.remove("sel");});if(el)el.classList.add("sel");}
+function addCalCat(){
+  var nm=ge("cc-name");if(!nm)return;var name=nm.value.trim();if(!name)return;
+  var col=(ge("cc-colors")&&ge("cc-colors").dataset.sel)||CATCOLS[0];
+  DATA.calCategories=DATA.calCategories||[];
+  DATA.calCategories.push({id:uid(),name:name,color:col});
+  nm.value="";save();renderSettings();
+}
+function delCalCat(id){
+  DATA.calCategories=(DATA.calCategories||[]).filter(function(c){return c.id!==id;});
+  if(DATA.calEventCats)Object.keys(DATA.calEventCats).forEach(function(k){if(DATA.calEventCats[k]===id)delete DATA.calEventCats[k];});
+  save();renderSettings();renderAll();
+}
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function dd(i){var d=new Date(wCur);d.setDate(d.getDate()+i);return d;}
 function tk(){return dkey(new Date());}
@@ -1107,6 +1152,63 @@ function togTaskFor(id,dk,pid){
   t.done[k]=!t.done[k];save();renderFamily();
 }
 
+// ── EARNING CHORES ──
+function renderEarningChores(isKid){
+  var h='';
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">⭐ Earning Chores</span>';
+  if(!isKid)h+='<button class="mini-btn" style="color:var(--mustard-text);border-color:var(--mustard)" onclick="openEarningModal()">+ Add</button>';
+  h+='</div><div class="card mustard">';
+  var ecs=DATA.earningChores||[];
+  var vis=isKid?ecs.filter(function(e){return !e.claimedBy||e.claimedBy===activeP.id;}):ecs;
+  if(!vis.length)h+='<div class="empty">No earning chores yet.'+(isKid?' Ask mom or dad!':'')+'</div>';
+  else vis.forEach(function(ec){
+    var canClaim=isKid&&!ec.claimedBy&&!ec.approved;
+    h+='<div class="task-row" style="cursor:'+(canClaim?'pointer':'default')+'" '+(canClaim?'onclick="claimEC(\''+ec.id+'\')"':'')+'>'+
+      '<span class="ttext">'+esc(ec.desc)+'</span>'+
+      '<span style="font-size:11px;color:var(--muted);margin-right:6px">'+esc(ec.rewardType)+(ec.rewardDetail?': '+esc(ec.rewardDetail):'')+'</span>';
+    if(ec.claimedBy){
+      var claimant=(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;});
+      h+='<span style="font-size:10px;color:var(--muted)">'+(ec.approved?'✅ ':'⏳ ')+(claimant?esc(claimant.name):'')+'</span>';
+    }
+    if(!isKid&&ec.claimedBy&&!ec.approved)h+='<button onclick="approveEC(\''+ec.id+'\')" style="padding:4px 10px;border-radius:var(--radius);border:none;background:var(--green);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Approve</button>';
+    if(!isKid)h+='<button class="del-btn" onclick="delEC(\''+ec.id+'\')">x</button>';
+    h+='</div>';
+  });
+  h+='</div>';
+  return h;
+}
+function openEarningModal(){
+  ge("ec-title").textContent="Add Earning Chore";ge("ec-desc").value="";ge("ec-reward-detail").value="";
+  var rt=DATA.rewardTypes||["Money","Screen time","Playdate","Family date"];
+  ge("ec-reward-type").innerHTML=rt.map(function(r){return'<option>'+esc(r)+'</option>';}).join("");
+  openModal("m-earning");
+}
+function claimEC(id){var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec||ec.claimedBy)return;ec.claimedBy=activeP.id;save();renderAll();}
+function approveEC(id){
+  var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec)return;
+  ec.approved=true;save();renderAll();
+  var claimant=(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;});
+  ge("rp-emoji").textContent="🎉";
+  ge("rp-name").textContent=claimant?claimant.name:"";
+  ge("rp-reward").textContent=ec.desc+" - "+ec.rewardType+(ec.rewardDetail?": "+ec.rewardDetail:"");
+  ge("reward-popup").style.display="flex";
+}
+function delEC(id){DATA.earningChores=(DATA.earningChores||[]).filter(function(x){return x.id!==id;});save();renderAll();}
+ge("ec-save").addEventListener("click",function(){
+  var desc=ge("ec-desc").value.trim();if(!desc)return;
+  DATA.earningChores=DATA.earningChores||[];
+  DATA.earningChores.push({id:uid(),desc:desc,rewardType:ge("ec-reward-type").value,rewardDetail:ge("ec-reward-detail").value.trim(),claimedBy:null,approved:false});
+  save();closeModal("m-earning");renderAll();
+});
+ge("ec-desc").addEventListener("keydown",function(e){if(e.key==="Enter")ge("ec-save").click();});
+
+// ── CALENDAR EVENT CATEGORY TAGGING ──
+function setEvCat(eventId,catId){
+  DATA.calEventCats=DATA.calEventCats||{};
+  if(catId)DATA.calEventCats[eventId]=catId;else delete DATA.calEventCats[eventId];
+  save();renderAll();
+}
+
 var kidFamView=false;
 function renderCalendar(){
   if(kidFamView){renderFamCalMonth();return;}
@@ -1301,7 +1403,7 @@ function renderSettings(){
     h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Calendar Categories</span></div><div style="padding:.75rem 1rem">';
     h+='<div style="font-size:12px;color:var(--muted);margin-bottom:.6rem;line-height:1.5">Create categories like Birthdays, Work or Social and pick a color, then tag your calendar events with them below.</div>';
     (DATA.calCategories||[]).forEach(function(c){h+='<div class="crow" style="padding:6px 0"><span style="width:14px;height:14px;border-radius:50%;background:'+c.color+';flex-shrink:0"></span><span style="flex:1;font-size:13px;margin-left:8px">'+esc(c.name)+'</span><button class="del-btn" onclick="delCalCat(\''+c.id+'\')">x</button></div>';});
-    h+='<div id="cc-colors" data-sel="'+CATCOLS[0]+'" style="display:flex;gap:6px;margin:8px 0">'+CATCOLS.map(function(c,i){return'<div class="copt'+(i===0?" sel":"")+'" onclick="selCC(\''+c+'\')" style="background:'+c+'"></div>';}).join("")+'</div>';
+    h+='<div id="cc-colors" data-sel="'+CATCOLS[0]+'" style="display:flex;gap:6px;margin:8px 0">'+CATCOLS.map(function(c,i){return'<div class="copt'+(i===0?" sel":"")+'" onclick="selCC(\''+c+'\',this)" style="background:'+c+'"></div>';}).join("")+'</div>';
     h+='<div class="add-row"><input class="add-inp" id="cc-name" placeholder="Category name..." onkeydown="if(event.key===\'Enter\')addCalCat()"><button class="add-btn" onclick="addCalCat()">Add</button></div>';
     h+='</div></div>';
   }
