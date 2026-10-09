@@ -369,7 +369,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
   <div class="mhandle"></div><div class="mtitle" id="gc-title-h">Add Calendar Event</div>
   <div class="mf"><label class="ml">Title</label><input class="mi" id="gc-title" type="text" placeholder="e.g. Dentist appointment"></div>
   <div class="m2"><div class="mf"><label class="ml">Date</label><input class="mi" id="gc-date" type="date"></div><div class="mf"><label class="ml">Time (optional)</label><input class="mi" id="gc-time" type="time"></div></div>
-  <div class="mf" id="gc-who-wrap"><label class="ml">Who is this for?</label><select class="msel" id="gc-who"></select></div>
+  <div class="mf" id="gc-who-wrap"><label class="ml">Who is this for? (tap one or more)</label><div class="achips" id="gc-who"></div></div>
   <div class="mf" id="gc-cat-wrap" style="display:none"><label class="ml">Category</label><select class="msel" id="gc-cat"></select></div>
   <div id="gc-err" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-gcal')">Cancel</button><button class="msave" id="gc-save">Save</button></div>
@@ -468,6 +468,7 @@ function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").
 function dd(i){var d=new Date(wCur);d.setDate(d.getDate()+i);return d;}
 function tk(){return dkey(new Date());}
 function ws(){return dkey(sow(new Date()));}
+function evHasPerson(e,name){return !!e&&((e.people&&e.people.indexOf(name)>=0)||e.person===name);}
 function pc(n){var p=DATA.profiles.find(function(x){return x.name===n;});return p?p.color:"#888580";}
 function av(p){var n=p&&p.name?p.name:"?";return n.charAt(0).toUpperCase();}
 function ge(id){return document.getElementById(id);}
@@ -808,7 +809,7 @@ function fetchCal(){
       var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
       var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
       var m=(ev.summary||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
-      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
+      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,people:m?m[1].split(",").map(function(x){return x.trim();}).filter(Boolean):[],name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
     });
     if(activeP)renderAll();
   }).catch(function(){});
@@ -842,7 +843,7 @@ function outlookEventsToInternal(items){
     var s=new Date(ev.start.dateTime+"Z"),e=new Date(ev.end.dateTime+"Z");
     if(ad){s=new Date(s.getFullYear(),s.getMonth(),s.getDate());e=new Date(e.getFullYear(),e.getMonth(),e.getDate());}
     var m=(ev.subject||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
-    return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,name:m?(m[2].trim()||m[1].trim()):(ev.subject||"Untitled")};
+    return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,people:m?m[1].split(",").map(function(x){return x.trim();}).filter(Boolean):[],name:m?(m[2].trim()||m[1].trim()):(ev.subject||"Untitled")};
   });
 }
 function tryOutlookCal(){
@@ -908,7 +909,7 @@ function fetchFamCal(){
       var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
       var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
       var m=(ev.summary||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
-      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
+      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,people:m?m[1].split(",").map(function(x){return x.trim();}).filter(Boolean):[],name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
     });
     renderAll();
   }).catch(function(){});
@@ -1018,8 +1019,8 @@ ge("gc-save").addEventListener("click",function(){
   var t=ge("gc-title").value.trim(),d=ge("gc-date").value;
   if(!t||!d){ge("gc-err").textContent="Please enter a title and date.";ge("gc-err").style.display="block";return;}
   var tm=ge("gc-time").value,catWrap=ge("gc-cat-wrap");
-  var who=ge("gc-who").value;
-  var fullTitle=who?"["+who+"] "+t:t;
+  var whoN=[].map.call(ge("gc-who").querySelectorAll(".achip.sel[data-name]"),function(c){return c.dataset.name;});
+  var fullTitle=whoN.length?"["+whoN.join(", ")+"] "+t:t;
   saveCalEventAny(gcalSource,gcalEid,fullTitle,d,tm).then(function(resp){
     var newId=gcalEid||(resp&&resp.id);
     if(newId&&catWrap.style.display!=="none")setEvCat(newId,ge("gc-cat").value);
@@ -1034,18 +1035,21 @@ ge("gc-delete").addEventListener("click",function(){
 });
 var gcalEid=null,gcalSource="personal";
 function fillWho(cur,source){
-  var opts='<option value="">'+(source==="family"?"Everyone (whole family)":"No one in particular")+'</option>';
-  var found=!cur;
-  (DATA.profiles||[]).forEach(function(p){if(p.name===cur)found=true;opts+='<option value="'+esc(p.name)+'"'+(p.name===cur?" selected":"")+'>'+esc(p.name)+'</option>';});
-  if(!found)opts+='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>';
-  ge("gc-who").innerHTML=opts;
+  var sel=(cur||[]).slice();
+  var names=(DATA.profiles||[]).map(function(p){return p.name;});
+  sel.forEach(function(n){if(names.indexOf(n)<0)names.push(n);});
+  var h='<span class="achip" style="background:#2F2F2F22;color:#2F2F2F" onclick="whoAll()">Everyone</span>';
+  names.forEach(function(n){var p=(DATA.profiles||[]).find(function(x){return x.name===n;});var col=p?p.color:"#888580";h+='<span class="achip'+(sel.indexOf(n)>=0?' sel':'')+'" data-name="'+esc(n)+'" style="background:'+col+'22;color:'+col+'" onclick="this.classList.toggle(\'sel\')">'+(p?av(p)+' ':'')+esc(n)+'</span>';});
+  ge("gc-who").innerHTML=h;
 }
+function whoAll(){var cs=ge("gc-who").querySelectorAll(".achip[data-name]");var all=[].every.call(cs,function(c){return c.classList.contains("sel");});[].forEach.call(cs,function(c){c.classList.toggle("sel",!all);});}
+
 function openAddCalEvent(source,dk){
   gcalEid=null;gcalSource=source;
   ge("gc-title-h").textContent=source==="family"?"Add Family Calendar Event":"Add Calendar Event";
   ge("gc-title").value="";ge("gc-date").value=dk||tk();ge("gc-time").value="";
   ge("gc-delete").style.display="none";ge("gc-err").style.display="none";
-  fillWho("",source);
+  fillWho([],source);
   var catWrap=ge("gc-cat-wrap");
   if(source==="personal"&&(DATA.calCategories||[]).length){catWrap.style.display="block";ge("gc-cat").innerHTML='<option value="">No category</option>'+(DATA.calCategories||[]).map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");}
   else catWrap.style.display="none";
@@ -1060,7 +1064,7 @@ function openEditCalEvent(id,source){
   ge("gc-date").value=dkey(ev.start);
   ge("gc-time").value=ev.allDay?"":(String(ev.start.getHours()).padStart(2,"0")+":"+String(ev.start.getMinutes()).padStart(2,"0"));
   ge("gc-delete").style.display="block";ge("gc-err").style.display="none";
-  fillWho(ev.person||"",source);
+  fillWho(ev.people||[],source);
   var catWrap=ge("gc-cat-wrap");
   if(source==="personal"&&(DATA.calCategories||[]).length){
     var cur=(DATA.calEventCats||{})[id]||"";
@@ -1075,7 +1079,7 @@ function evCol(ev){
     var cat=(DATA.calCategories||[]).find(function(c){return c.id===DATA.calEventCats[ev.id];});
     if(cat)return cat.color;
   }
-  return ev.person?pc(ev.person):"#000";
+  return ev.person?((ev.people&&ev.people.length>1)?"#2F2F2F":pc((ev.people&&ev.people[0])||ev.person)):"#000";
 }
 function myTodayEvents(dt){
   var dk=dkey(dt);
@@ -1095,6 +1099,15 @@ function myTodayEvents(dt){
     var ee=new Date(ev.end.getFullYear(),ev.end.getMonth(),ev.end.getDate());
     return ev.allDay?(d>=s&&d<ee):d.getTime()===s.getTime();
   });
+  if(activeP&&activeP.role==="parent"&&!isFamilyProfile()){
+    var have={};gc.forEach(function(x){have[x.id]=1;});
+    (famCalEvts||[]).forEach(function(ev){
+      if(have[ev.id]||!evHasPerson(ev,activeP.name))return;
+      var s=new Date(ev.start.getFullYear(),ev.start.getMonth(),ev.start.getDate());
+      var ee=new Date(ev.end.getFullYear(),ev.end.getMonth(),ev.end.getDate());
+      if(ev.allDay?(d>=s&&d<ee):d.getTime()===s.getTime())gc.push(ev);
+    });
+  }
   return gc.concat(ae).sort(function(a,b){return a.allDay&&!b.allDay?-1:!a.allDay&&b.allDay?1:a.start-b.start;});
 }
 function evOn(dt){
@@ -1517,7 +1530,7 @@ function renderCalendar(){
   h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
   for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=evOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");var cds=dkey(cd);h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'" onclick="jmpDate(\''+cds+'\')">'+'<div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
   h+='</div>';
-  var ppl=[...new Set(calEvts.map(function(e){return e.person;}).filter(Boolean))];
+  var ppl=[...new Set([].concat.apply([],calEvts.map(function(e){return e.people||[];})))];
   if(ppl.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.625rem 0;font-size:11px;color:var(--muted)">'+ppl.map(function(n){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:'+pc(n)+';display:inline-block"></span>'+esc(n)+'</span>';}).join('')+'</div>';
   ge("page-calendar").innerHTML=h;
 }
@@ -1546,7 +1559,7 @@ function renderKidCalendar(){
   var today=new Date();today.setHours(0,0,0,0);var any=false;
   for(var i=0;i<7;i++){
     var d=new Date(today);d.setDate(d.getDate()+i);
-    var devts=evOn(d).filter(function(e){return e.isApp;}).concat(famEvOn(d).filter(function(e){return e.person===activeP.name;}));
+    var devts=evOn(d).filter(function(e){return e.isApp;}).concat(famEvOn(d).filter(function(e){return evHasPerson(e,activeP.name);}));
     if(!devts.length)continue;
     any=true;
     h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
@@ -1560,7 +1573,7 @@ function renderKidCalendar(){
   var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
   h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.875rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
   h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
-  for(var ci2=0;ci2<42;ci2++){var cd2=new Date(gs);cd2.setDate(gs.getDate()+ci2);var inM2=cd2.getMonth()===mo,isT2=cd2.getTime()===td.getTime();var cevts2=evOn(cd2).filter(function(e){return e.isApp;}).concat(famEvOn(cd2).filter(function(e){return e.person===activeP.name;}));var clbls2=cevts2.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM2?"":" om")+(isT2?" today":"")+'"><div class="mc-date">'+cd2.getDate()+'</div>'+clbls2+(cevts2.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts2.length-3)+'</div>':'')+'</div>';}
+  for(var ci2=0;ci2<42;ci2++){var cd2=new Date(gs);cd2.setDate(gs.getDate()+ci2);var inM2=cd2.getMonth()===mo,isT2=cd2.getTime()===td.getTime();var cevts2=evOn(cd2).filter(function(e){return e.isApp;}).concat(famEvOn(cd2).filter(function(e){return evHasPerson(e,activeP.name);}));var clbls2=cevts2.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM2?"":" om")+(isT2?" today":"")+'"><div class="mc-date">'+cd2.getDate()+'</div>'+clbls2+(cevts2.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts2.length-3)+'</div>':'')+'</div>';}
   h+='</div>';
   h+='<button onclick="toggleKidFamView(true)" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px dashed var(--border);background:transparent;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-top:.75rem">👪 See the Family Calendar</button>';
   ge("page-calendar").innerHTML=h;
@@ -1716,7 +1729,7 @@ function renderSettings(){
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 9 Oct 2026 - build 6</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
