@@ -369,6 +369,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
   <div class="mhandle"></div><div class="mtitle" id="gc-title-h">Add Calendar Event</div>
   <div class="mf"><label class="ml">Title</label><input class="mi" id="gc-title" type="text" placeholder="e.g. Dentist appointment"></div>
   <div class="m2"><div class="mf"><label class="ml">Date</label><input class="mi" id="gc-date" type="date"></div><div class="mf"><label class="ml">Time (optional)</label><input class="mi" id="gc-time" type="time"></div></div>
+  <div class="mf" id="gc-who-wrap"><label class="ml">Who is this for?</label><select class="msel" id="gc-who"></select></div>
   <div class="mf" id="gc-cat-wrap" style="display:none"><label class="ml">Category</label><select class="msel" id="gc-cat"></select></div>
   <div id="gc-err" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-gcal')">Cancel</button><button class="msave" id="gc-save">Save</button></div>
@@ -1017,7 +1018,9 @@ ge("gc-save").addEventListener("click",function(){
   var t=ge("gc-title").value.trim(),d=ge("gc-date").value;
   if(!t||!d){ge("gc-err").textContent="Please enter a title and date.";ge("gc-err").style.display="block";return;}
   var tm=ge("gc-time").value,catWrap=ge("gc-cat-wrap");
-  saveCalEventAny(gcalSource,gcalEid,t,d,tm).then(function(resp){
+  var who=ge("gc-who").value;
+  var fullTitle=who?"["+who+"] "+t:t;
+  saveCalEventAny(gcalSource,gcalEid,fullTitle,d,tm).then(function(resp){
     var newId=gcalEid||(resp&&resp.id);
     if(newId&&catWrap.style.display!=="none")setEvCat(newId,ge("gc-cat").value);
     closeModal("m-gcal");refreshCalSource(gcalSource);
@@ -1030,11 +1033,19 @@ ge("gc-delete").addEventListener("click",function(){
   .catch(function(){ge("gc-err").textContent="Could not delete. Try again.";ge("gc-err").style.display="block";});
 });
 var gcalEid=null,gcalSource="personal";
+function fillWho(cur,source){
+  var opts='<option value="">'+(source==="family"?"Everyone (whole family)":"No one in particular")+'</option>';
+  var found=!cur;
+  (DATA.profiles||[]).forEach(function(p){if(p.name===cur)found=true;opts+='<option value="'+esc(p.name)+'"'+(p.name===cur?" selected":"")+'>'+esc(p.name)+'</option>';});
+  if(!found)opts+='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>';
+  ge("gc-who").innerHTML=opts;
+}
 function openAddCalEvent(source,dk){
   gcalEid=null;gcalSource=source;
   ge("gc-title-h").textContent=source==="family"?"Add Family Calendar Event":"Add Calendar Event";
   ge("gc-title").value="";ge("gc-date").value=dk||tk();ge("gc-time").value="";
   ge("gc-delete").style.display="none";ge("gc-err").style.display="none";
+  fillWho("",source);
   var catWrap=ge("gc-cat-wrap");
   if(source==="personal"&&(DATA.calCategories||[]).length){catWrap.style.display="block";ge("gc-cat").innerHTML='<option value="">No category</option>'+(DATA.calCategories||[]).map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");}
   else catWrap.style.display="none";
@@ -1049,6 +1060,7 @@ function openEditCalEvent(id,source){
   ge("gc-date").value=dkey(ev.start);
   ge("gc-time").value=ev.allDay?"":(String(ev.start.getHours()).padStart(2,"0")+":"+String(ev.start.getMinutes()).padStart(2,"0"));
   ge("gc-delete").style.display="block";ge("gc-err").style.display="none";
+  fillWho(ev.person||"",source);
   var catWrap=ge("gc-cat-wrap");
   if(source==="personal"&&(DATA.calCategories||[]).length){
     var cur=(DATA.calEventCats||{})[id]||"";
