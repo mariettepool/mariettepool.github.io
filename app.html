@@ -247,6 +247,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
       </div>
       <button class="pay-btn" onclick="goPay()">Pay with PayFast</button>
       <p style="font-size:11px;color:var(--muted);margin-top:.875rem">Secure payment via PayFast</p>
+      <p style="font-size:11px;color:var(--muted);margin-top:.5rem">By subscribing you agree to our <a href="terms.html" target="_blank" style="color:var(--muted)">Terms &amp; Conditions</a> and <a href="refunds.html" target="_blank" style="color:var(--muted)">Refund &amp; Cancellation Policy</a>. Cancel anytime in Settings.</p>
       <button onclick="showProfiles()" style="margin-top:.75rem;background:none;border:none;font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline">Switch profile</button>
     </div>
   </div>
@@ -380,7 +381,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 var FB_CFG={apiKey:"AIzaSyAfo1GRLp5keYakJlE9EsC5s4CvkiClTcw",authDomain:"sticky-planner.firebaseapp.com",projectId:"sticky-planner",storageBucket:"sticky-planner.firebasestorage.app",messagingSenderId:"1036703981049",appId:"1:1036703981049:web:09e93dcfa2804f717bb128"};
 var OAUTH_ID="1036703981049-et7d7ubvo6s5bkndnccded0l4pbgqdag.apps.googleusercontent.com";
 var MS_CLIENT_ID="PASTE_YOUR_AZURE_CLIENT_ID_HERE";
-var MERCHANT_ID="PASTE_MERCHANT_ID_HERE";
+var BILLING=null,unsubB=null,payPending=false;
 var WHITELIST=["mariettepool@gmail.com","vanmjg@gmail.com"];
 var TRIAL_DAYS=7;
 var EMOJIS=["\u{1F469}","\u{1F469}\u200D\u{1F9B1}","\u{1F469}\u200D\u{1F9B2}","\u{1F468}","\u{1F468}\u200D\u{1F9B1}","\u{1F9D4}","\u{1F468}\u200D\u{1F9B2}","\u{1F467}","\u{1F467}\u200D\u{1F9B1}","\u{1F9D2}","\u{1F466}","\u{1F476}","\u{1F47C}"];
@@ -479,6 +480,22 @@ function save(){
   },700);
 }
 
+function openAfterGate(){
+  if(!activeP){var lp=user?localStorage.getItem("sp_pid_"+user.uid):null;var lpp=lp?(DATA.profiles||[]).find(function(p){return p.id===lp;}):null;if(lpp){activeP=lpp;launch();}else showProfiles();}else renderAll();
+}
+function watchBilling(){
+  if(unsubB){unsubB();unsubB=null;}
+  if(!fbReady||!dataOwnerUid)return;
+  unsubB=db.doc("users/"+dataOwnerUid+"/billing/sub").onSnapshot(function(snap){
+    var had=hasAcc();
+    BILLING=snap.exists?snap.data():null;
+    if(isPd())payPending=false;
+    var onPW=ge("paywall-screen").style.display==="block";
+    if(onPW){if(hasAcc())openAfterGate();else showPW();}
+    else if(!had&&hasAcc()&&activeP)renderAll();
+    else if(activeP&&aPage==="settings")renderAll();
+  },function(){});
+}
 function subscribe(){
   if(!fbReady||!dataOwnerUid)return;
   if(unsub)unsub();
@@ -489,8 +506,11 @@ function subscribe(){
     if(first){
       first=false;
       chkPay();
-      if(!hasAcc()){showPW();return;}
-      if(!activeP){var lp=user?localStorage.getItem("sp_pid_"+user.uid):null;var lpp=lp?(DATA.profiles||[]).find(function(p){return p.id===lp;}):null;if(lpp){activeP=lpp;launch();}else showProfiles();}else renderAll();
+      db.doc("users/"+dataOwnerUid+"/billing/sub").get().then(function(b){BILLING=b.exists?b.data():null;}).catch(function(){BILLING=null;}).then(function(){
+        watchBilling();
+        if(!hasAcc()){showPW();return;}
+        openAfterGate();
+      });
     } else {
       if(activeP)renderAll();
       else showProfiles();
@@ -585,12 +605,14 @@ function shareInvite(){
 
 function isWL(){return user&&WHITELIST.indexOf((user.email||"").toLowerCase().trim())>=0;}
 function tdl(){if(!user)return 0;var c=new Date(user.metadata.creationTime).getTime();return Math.max(0,TRIAL_DAYS-Math.floor((Date.now()-c)/86400000));}
-function isPd(){if(!DATA.subscription)return false;var s=DATA.subscription;return s.status==="active"&&(!s.expiresAt||Date.now()<s.expiresAt);}
+function isPd(){var s=BILLING;if(!s||(s.status!=="active"&&s.status!=="cancelled"))return false;return !!s.expiresAt&&Date.now()<s.expiresAt;}
 function hasAcc(){return isWL()||isPd()||tdl()>0;}
 
 function chkPay(){
+  // Access is only ever granted by PayFast's server-to-server notification (see Cloud Function).
+  // Landing on ?payment=return proves nothing, so we just wait for the billing record to appear.
   var p=new URLSearchParams(window.location.search);
-  if(p.get("payment")==="success"){var pl=localStorage.getItem("sp_pl")||"monthly";DATA.subscription={status:"active",plan:pl,expiresAt:Date.now()+((pl==="annual"?365:30)*86400000)};save();window.history.replaceState({},"","/app.html");localStorage.removeItem("sp_pl");}
+  if(p.get("payment")==="return"){payPending=true;window.history.replaceState({},"","/app.html");setTimeout(function(){payPending=false;if(ge("paywall-screen").style.display==="block")showPW();},120000);}
   if(p.get("payment")==="cancel")window.history.replaceState({},"","/app.html");
 }
 
@@ -607,7 +629,7 @@ if(fbReady){
       user=u;
       resolveOwnerAndProceed();
     }
-    else{user=null;activeP=null;dataOwnerUid=null;if(unsub){unsub();unsub=null;}showScr("auth-screen");}
+    else{user=null;activeP=null;dataOwnerUid=null;BILLING=null;if(unsub){unsub();unsub=null;}if(unsubB){unsubB();unsubB=null;}showScr("auth-screen");}
   });
 
   ge("btn-signin").addEventListener("click",function(){
@@ -681,18 +703,28 @@ function showPW(){
   showScr("");ge("paywall-screen").style.display="block";
   var dl=tdl();var msg=ge("pw-msg");
   if(isPd()){msg.innerHTML="";return;}
+  if(payPending){msg.innerHTML='<div style="background:var(--mustard-bg);border:1.5px solid var(--mustard);border-radius:var(--radius);padding:.625rem 1rem;font-size:12px;color:var(--mustard-text);font-weight:500">Thanks! We are confirming your payment with PayFast. This page unlocks by itself in a few seconds.</div>';return;}
   msg.innerHTML=dl===0?'<div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:var(--radius);padding:.625rem 1rem;font-size:12px;color:var(--red-text);font-weight:500">Your 7-day trial has ended</div>':'<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:var(--radius);padding:.625rem 1rem;font-size:12px;color:var(--green-text);font-weight:500">'+dl+' day'+(dl!==1?"s":"")+" left in your free trial</div>";
 }
 
 function selPlan(p){selPlan2=p;ge("pw-monthly").className="plan-card"+(p==="monthly"?" sel":"");ge("pw-annual").className="plan-card"+(p==="annual"?" sel":"");}
 function goPay(){
-  if(!user)return;localStorage.setItem("sp_pl",selPlan2);
-  var amt=selPlan2==="monthly"?"49.00":"399.00";
-  var itm=selPlan2==="monthly"?"StickyPaper Monthly Plan":"StickyPaper Annual Plan";
-  var f=document.createElement("form");f.method="POST";f.action="https://www.payfast.co.za/eng/process";
-  var flds={merchant_id:MERCHANT_ID,return_url:"https://app.stickypaper.co.za/app.html?payment=success",cancel_url:"https://app.stickypaper.co.za/app.html?payment=cancel",notify_url:"https://app.stickypaper.co.za/payfast-notify",name_first:user.displayName?(user.displayName.split(" ")[0]):"Customer",email_address:user.email||"",m_payment_id:user.uid+"_"+Date.now(),amount:amt,item_name:itm,custom_str1:user.uid,custom_str2:selPlan2};
-  Object.keys(flds).forEach(function(k){var i=document.createElement("input");i.type="hidden";i.name=k;i.value=flds[k];f.appendChild(i);});
-  document.body.appendChild(f);f.submit();
+  if(!user)return;
+  if(!fns){alert("Payments are not available right now. Please try again later.");return;}
+  var btn=document.querySelector("#paywall-screen .pay-btn");
+  if(btn){btn.disabled=true;btn.textContent="Opening PayFast...";}
+  function reset(){if(btn){btn.disabled=false;btn.textContent="Pay with PayFast";}}
+  fns.httpsCallable("createPayfastPayment")({plan:selPlan2}).then(function(res){
+    var d=res.data;
+    var f=document.createElement("form");f.method="POST";f.action=d.action;
+    Object.keys(d.fields).forEach(function(k){var i=document.createElement("input");i.type="hidden";i.name=k;i.value=d.fields[k];f.appendChild(i);});
+    document.body.appendChild(f);f.submit();
+  }).catch(function(e){console.warn(e);reset();alert("We could not start the payment. Please check your connection and try again.");});
+}
+function cancelSub(){
+  if(!canEdit()||!fns)return;
+  if(!confirm("Cancel your subscription? You keep access until the end of the period you have already paid for."))return;
+  fns.httpsCallable("cancelPayfastSubscription")({}).then(function(){alert("Your subscription has been cancelled. You keep access until the end of the paid period.");}).catch(function(e){console.warn(e);alert("We could not cancel automatically. You can also cancel from your PayFast account or the link in your PayFast receipt email.");});
 }
 
 function renderProfiles(){
@@ -1624,7 +1656,7 @@ function renderSettings(){
   var h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">Settings</h2>';
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Subscription</span></div><div class="crow">';
   if(isWL())h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--green)">Free access (tester)</div></div>';
-  else if(isPd())h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--green)">Active subscription</div><div style="font-size:11px;color:var(--muted)">Expires '+new Date(DATA.subscription.expiresAt).toLocaleDateString()+'</div></div>';
+  else if(isPd()){var cn=BILLING.status==="cancelled";h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:'+(cn?'var(--mustard-text)':'var(--green)')+'">'+(cn?'Cancelled - access until ':'Active subscription - renews ')+new Date(BILLING.expiresAt).toLocaleDateString()+'</div><div style="font-size:11px;color:var(--muted)">'+(BILLING.plan==="annual"?"Annual plan":"Monthly plan")+'</div></div>'+(!cn&&canEdit()?'<button onclick="cancelSub()" style="padding:6px 13px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;color:var(--charcoal);font-size:12px;font-weight:600;cursor:pointer">Cancel</button>':'');}
   else h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--mustard-text)">Free trial - '+tdl()+' days left</div></div><button onclick="showPW()" style="padding:6px 13px;border-radius:var(--radius);border:none;background:var(--red);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Subscribe</button>';
   h+='</div></div>';
   var isParSet=canEdit();
