@@ -171,6 +171,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 </head>
 <body>
+<div id="boot" style="position:fixed;inset:0;background:#FDFBF7;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:500;font-family:Georgia,serif;color:#E8000A"><img src="logo.png" alt="" style="width:90px;height:90px;object-fit:contain;margin-bottom:.75rem" onerror="this.style.display='none'"><div style="font-size:18px">StickyPaper</div><div style="font-size:12px;color:#888580;margin-top:.4rem;font-family:sans-serif">Loading your planner...</div></div>
 
 <!-- AUTH -->
 <div id="auth-screen" class="screen dots-bg">
@@ -365,10 +366,18 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-earning')">Cancel</button><button class="msave" id="ec-save">Add</button></div>
 </div></div>
 
+<div class="modal" id="m-calpick"><div class="mbox">
+  <div class="mhandle"></div><div class="mtitle">Choose calendars</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:.5rem;line-height:1.5">Tick every calendar from this account that should show up here.</div>
+  <div id="cp-list" style="max-height:50vh;overflow:auto;margin-bottom:.5rem"></div>
+  <div id="cp-err" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>
+  <div class="mbtns"><button class="mcancel" onclick="closeModal('m-calpick')">Cancel</button><button class="msave" onclick="saveCalPicker()">Save</button></div>
+</div></div>
 <div class="modal" id="m-gcal"><div class="mbox">
   <div class="mhandle"></div><div class="mtitle" id="gc-title-h">Add Calendar Event</div>
   <div class="mf"><label class="ml">Title</label><input class="mi" id="gc-title" type="text" placeholder="e.g. Dentist appointment"></div>
   <div class="m2"><div class="mf"><label class="ml">Date</label><input class="mi" id="gc-date" type="date"></div><div class="mf"><label class="ml">Time (optional)</label><input class="mi" id="gc-time" type="time"></div></div>
+  <div class="mf" id="gc-calsel-wrap" style="display:none"><label class="ml">Save to calendar</label><select class="msel" id="gc-calsel"></select></div>
   <div class="mf" id="gc-who-wrap"><label class="ml">Who is this for? (tap one or more)</label><div class="achips" id="gc-who"></div></div>
   <div class="mf" id="gc-cat-wrap" style="display:none"><label class="ml">Category</label><select class="msel" id="gc-cat"></select></div>
   <div id="gc-err" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>
@@ -400,6 +409,8 @@ try{
   firebase.initializeApp(FB_CFG);
   auth=firebase.auth();
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
+  setTimeout(function(){var b=document.getElementById("boot");if(b&&b.style.display!=="none"){hideBoot();if(!user)showScr("auth-screen");}},9000);
   db=firebase.firestore();
   fns=firebase.functions();
   gProv=new firebase.auth.GoogleAuthProvider();
@@ -483,7 +494,7 @@ function save(){
 }
 
 function openAfterGate(){
-  if(!activeP){var lp=user?localStorage.getItem("sp_pid_"+user.uid):null;var lpp=lp?(DATA.profiles||[]).find(function(p){return p.id===lp;}):null;if(lpp){activeP=lpp;launch();}else showProfiles();}else renderAll();
+  if(!activeP){var lp=user?localStorage.getItem("sp_pid_"+user.uid):null;var lpp=lp?(DATA.profiles||[]).find(function(p){return p.id===lp;}):null;if(lpp){activeP=lpp;launch();}else if(lp===FAMILY_PID){pickFamily();}else showProfiles();}else renderAll();
 }
 function watchBilling(){
   if(unsubB){unsubB();unsubB=null;}
@@ -504,6 +515,7 @@ function subscribe(){
   var first=true;
   unsub=db.doc("users/"+dataOwnerUid+"/planner/data").onSnapshot(function(snap){
     DATA=snap.exists?Object.assign(nd(),snap.data()):nd();
+    hydrateFamCache();
     if(activeP){var fr=DATA.profiles.find(function(p){return p.id===activeP.id;});if(fr)activeP=fr;}
     if(first){
       first=false;
@@ -628,10 +640,12 @@ if(fbReady){
   auth.onAuthStateChanged(function(u){
     ge("auth-msg").style.display="none";
     if(u){
-      user=u;
+      user=u;window.__manualSignOut=false;try{localStorage.setItem("sp_signed_in","1");}catch(e){}
       resolveOwnerAndProceed();
     }
-    else{user=null;activeP=null;dataOwnerUid=null;BILLING=null;if(unsub){unsub();unsub=null;}if(unsubB){unsubB();unsubB=null;}showScr("auth-screen");}
+    else{var wasIn=false;try{wasIn=localStorage.getItem("sp_signed_in")==="1";}catch(e){}
+      if(wasIn&&!window.__manualSignOut){ge("auth-msg").textContent="Your session ended. Please sign in again.";ge("auth-msg").style.display="block";ge("auth-msg").style.color="var(--muted)";}
+      user=null;activeP=null;dataOwnerUid=null;BILLING=null;if(unsub){unsub();unsub=null;}if(unsubB){unsubB();unsubB=null;}showScr("auth-screen");}
   });
 
   ge("btn-signin").addEventListener("click",function(){
@@ -678,7 +692,7 @@ if(fbReady){
     auth.sendPasswordResetEmail(email).then(function(){showAuthMsg("Password reset email sent - check your inbox.",false);}).catch(function(){showAuthMsg("Could not send reset email. Check the address and try again.",true);});
   });
 
-  ge("btn-signout").addEventListener("click",function(){calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();});
+  ge("btn-signout").addEventListener("click",function(){window.__manualSignOut=true;try{localStorage.removeItem("sp_signed_in");}catch(e){}calToken=null;calEvts=[];if(user)localStorage.removeItem("ct_"+user.uid);auth.signOut();});
 }else{
   var fbm=ge("auth-msg");
   if(fbm){fbm.textContent="Could not load required sign-in services. Please check your internet connection or disable any ad blocker for this site, then refresh.";fbm.style.display="block";fbm.style.color="var(--red)";}
@@ -690,7 +704,9 @@ if(fbReady){
   var sob=ge("btn-signout");if(sob)sob.addEventListener("click",function(){});
 }
 
+function hideBoot(){var b=document.getElementById("boot");if(b)b.style.display="none";}
 function showScr(id){
+  hideBoot();
   ["auth-screen","profile-screen"].forEach(function(s){
     var el=ge(s);
     el.className="screen"+(s===id?" active":"");
@@ -795,24 +811,83 @@ function initTC(){
   if(tokenClient)return;
   tokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user&&activeP){calToken=r.access_token;localStorage.setItem("ct_"+user.uid+"_"+activeP.id,calToken);fetchCal();if(aPage==="settings")renderSettings();}}});
 }
-function fetchCal(){
-  if(!calToken)return;
+
+// ── MULTI-CALENDAR (Google): several calendars from one connected account ──
+function selCalKey(source){return source==="family"?"family":"p_"+(activeP?activeP.id:"");}
+function selCalIds(source){var a=(DATA.calSel||{})[selCalKey(source)];return(a&&a.length)?a:[{id:"primary",name:"Main calendar",w:true}];}
+function mapGEvent(ev,calId){
+  var ad=!!(ev.start&&ev.start.date);
+  var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
+  var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
+  var m=(ev.summary||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
+  return{id:ev.id,calId:calId,start:s,end:e,allDay:ad,person:m?m[1].trim():null,people:m?m[1].split(",").map(function(x){return x.trim();}).filter(Boolean):[],name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
+}
+function fetchGoogleEvents(token,source){
   var mn=new Date();mn.setMonth(mn.getMonth()-1);
   var mx=new Date();mx.setMonth(mx.getMonth()+6);
   var pm=new URLSearchParams({timeMin:mn.toISOString(),timeMax:mx.toISOString(),singleEvents:"true",orderBy:"startTime",maxResults:"2500"});
-  fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?"+pm,{headers:{Authorization:"Bearer "+calToken}})
-  .then(function(r){if(r.status===401){calToken=null;if(user&&activeP)localStorage.removeItem("ct_"+user.uid+"_"+activeP.id);return null;}return r.json();})
-  .then(function(data){
-    if(!data)return;
-    calEvts=(data.items||[]).map(function(ev){
-      var ad=!!(ev.start&&ev.start.date);
-      var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
-      var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
-      var m=(ev.summary||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
-      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,people:m?m[1].split(",").map(function(x){return x.trim();}).filter(Boolean):[],name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
+  return Promise.all(selCalIds(source).map(function(c){
+    return fetch("https://www.googleapis.com/calendar/v3/calendars/"+encodeURIComponent(c.id)+"/events?"+pm,{headers:{Authorization:"Bearer "+token}})
+    .then(function(r){if(r.status===401)throw new Error("401");return r.ok?r.json():{items:[]};})
+    .then(function(d){return(d.items||[]).map(function(ev){return mapGEvent(ev,c.id);});});
+  })).then(function(arrs){return[].concat.apply([],arrs).sort(function(a,b){return a.start-b.start;});});
+}
+function openCalPicker(source){
+  var token=source==="family"?famCalToken:calToken;
+  if(!token){alert("Please connect your Google calendar first.");return;}
+  calPickSource=source;
+  ge("cp-list").innerHTML='<div style="font-size:12px;color:var(--muted)">Loading your calendars...</div>';
+  ge("cp-err").style.display="none";
+  openModal("m-calpick");
+  fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=250",{headers:{Authorization:"Bearer "+token}})
+  .then(function(r){if(!r.ok)throw new Error("fail");return r.json();})
+  .then(function(d){
+    var cur=selCalIds(source).map(function(c){return c.id;});
+    var h="";
+    (d.items||[]).forEach(function(c){
+      var id=c.primary?"primary":c.id;
+      var nm=c.summaryOverride||c.summary||c.id;
+      var w=(c.accessRole==="owner"||c.accessRole==="writer");
+      h+='<label style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer"><input type="checkbox" class="cp-box" data-id="'+esc(id)+'" data-name="'+esc(nm)+'" data-w="'+(w?1:0)+'"'+(cur.indexOf(id)>=0?" checked":"")+' style="width:18px;height:18px"><span style="flex:1">'+esc(nm)+(c.primary?" (main)":"")+'</span>'+(w?'':'<span style="font-size:10px;color:var(--muted)">view only</span>')+'</label>';
     });
-    if(activeP)renderAll();
-  }).catch(function(){});
+    ge("cp-list").innerHTML=h||'<div style="font-size:12px;color:var(--muted)">No calendars found.</div>';
+  }).catch(function(){ge("cp-list").innerHTML="";ge("cp-err").textContent="Could not load your calendars. Please reconnect and try again.";ge("cp-err").style.display="block";});
+}
+var calPickSource="personal";
+function saveCalPicker(){
+  var boxes=[].slice.call(ge("cp-list").querySelectorAll(".cp-box"));
+  var chosen=boxes.filter(function(b){return b.checked;}).map(function(b){return{id:b.dataset.id,name:b.dataset.name,w:b.dataset.w==="1"};});
+  if(!chosen.length){ge("cp-err").textContent="Please tick at least one calendar.";ge("cp-err").style.display="block";return;}
+  DATA.calSel=DATA.calSel||{};DATA.calSel[selCalKey(calPickSource)]=chosen;
+  save();closeModal("m-calpick");
+  if(calPickSource==="family")fetchFamCal();else fetchCal();
+  if(aPage==="settings")renderSettings();
+}
+function fillCalSel(source){
+  var w=selCalIds(source).filter(function(c){return c.w!==false;});
+  var wrap=ge("gc-calsel-wrap");
+  if(calProviderFor(source)!=="google"||w.length<2){wrap.style.display="none";gcalCalId=w.length?w[0].id:"primary";return;}
+  ge("gc-calsel").innerHTML=w.map(function(c){return'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>';}).join("");
+  gcalCalId=w[0].id;wrap.style.display="block";
+}
+// ── FAMILY CALENDAR CACHE: lets kids / other devices see family events without their own Google sign-in ──
+function cacheFamEvents(){
+  if(!fbReady||!dataOwnerUid)return;
+  var lo=new Date();lo.setDate(lo.getDate()-3);lo.setHours(0,0,0,0);
+  var hi=new Date();hi.setDate(hi.getDate()+60);
+  var ev=(famCalEvts||[]).filter(function(e){return !e.cached&&e.end>=lo&&e.start<=hi;}).slice(0,250).map(function(e){return{id:e.id,s:e.start.getTime(),e:e.end.getTime(),ad:e.allDay?1:0,n:e.name,p:e.people||[]};});
+  if(JSON.stringify((DATA.famCal||{}).events||[])===JSON.stringify(ev))return;
+  DATA.famCal={events:ev,updated:Date.now()};save();
+}
+function hydrateFamCache(){
+  if(famCalToken||famMsToken)return;
+  var c=DATA.famCal;if(!c||!c.events)return;
+  famCalEvts=c.events.map(function(x){return{id:x.id,start:new Date(x.s),end:new Date(x.e),allDay:!!x.ad,person:(x.p&&x.p.length)?x.p.join(", "):null,people:x.p||[],name:x.n,cached:true};});
+}
+function fetchCal(){
+  if(!calToken)return;
+  fetchGoogleEvents(calToken,"personal").then(function(list){calEvts=list;if(activeP)renderAll();})
+  .catch(function(e){if(String(e&&e.message)==="401"){calToken=null;if(user&&activeP)localStorage.removeItem("ct_"+user.uid+"_"+activeP.id);}});
 }
 
 // ── MICROSOFT/OUTLOOK CALENDAR (alternative to Google - see MS_CLIENT_ID above) ──
@@ -894,25 +969,11 @@ function initFamTC(){
   famTokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user){famCalToken=r.access_token;localStorage.setItem("fct_"+user.uid,famCalToken);fetchFamCal();if(aPage==="settings")renderSettings();}}});
 }
 function conFamCal(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:"select_account"});else{initFamTC();setTimeout(function(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:"select_account"});},500);}}
-function disFamCal(){famCalToken=null;famCalEvts=[];if(user)localStorage.removeItem("fct_"+user.uid);renderSettings();renderAll();}
+function disFamCal(){famCalToken=null;famCalEvts=[];DATA.famCal=null;save();if(user)localStorage.removeItem("fct_"+user.uid);renderSettings();renderAll();}
 function fetchFamCal(){
   if(!famCalToken)return;
-  var mn=new Date();mn.setMonth(mn.getMonth()-1);
-  var mx=new Date();mx.setMonth(mx.getMonth()+6);
-  var pm=new URLSearchParams({timeMin:mn.toISOString(),timeMax:mx.toISOString(),singleEvents:"true",orderBy:"startTime",maxResults:"2500"});
-  fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?"+pm,{headers:{Authorization:"Bearer "+famCalToken}})
-  .then(function(r){if(r.status===401){famCalToken=null;if(user)localStorage.removeItem("fct_"+user.uid);return null;}return r.json();})
-  .then(function(data){
-    if(!data)return;
-    famCalEvts=(data.items||[]).map(function(ev){
-      var ad=!!(ev.start&&ev.start.date);
-      var s=ad?new Date(ev.start.date+"T00:00:00"):new Date(ev.start.dateTime);
-      var e=ad?new Date(ev.end.date+"T00:00:00"):new Date(ev.end.dateTime);
-      var m=(ev.summary||"").match(/^\s*\[([^\]]+)\]\s*(.*)$/);
-      return{id:ev.id,start:s,end:e,allDay:ad,person:m?m[1].trim():null,people:m?m[1].split(",").map(function(x){return x.trim();}).filter(Boolean):[],name:m?(m[2].trim()||m[1].trim()):(ev.summary||"Untitled")};
-    });
-    renderAll();
-  }).catch(function(){});
+  fetchGoogleEvents(famCalToken,"family").then(function(list){famCalEvts=list;renderAll();cacheFamEvents();})
+  .catch(function(e){if(String(e&&e.message)==="401"){famCalToken=null;if(user)localStorage.removeItem("fct_"+user.uid);}});
 }
 function tryFamOutlookCal(){
   if(!user)return;
@@ -945,7 +1006,7 @@ function fetchFamOutlookCal(){
   var url="https://graph.microsoft.com/v1.0/me/calendarview?startDateTime="+mn.toISOString()+"&endDateTime="+mx.toISOString()+"&$top=250&$select=id,subject,start,end,isAllDay";
   fetch(url,{headers:{Authorization:"Bearer "+famMsToken,Prefer:'outlook.timezone="UTC"'}})
   .then(function(r){if(r.status===401){famMsToken=null;return null;}return r.json();})
-  .then(function(data){if(!data)return;famCalEvts=outlookEventsToInternal(data.value);renderAll();})
+  .then(function(data){if(!data)return;famCalEvts=outlookEventsToInternal(data.value);renderAll();cacheFamEvents();})
   .catch(function(){});
 }
 function famEvOn(dt){
@@ -971,13 +1032,13 @@ function gcalEventBody(title,dateStr,timeStr){
 function saveGcalEvent(source,eventId,title,dateStr,timeStr){
   var token=source==="family"?famCalToken:calToken;
   if(!token)return Promise.reject(new Error("Not connected"));
-  var url="https://www.googleapis.com/calendar/v3/calendars/primary/events"+(eventId?"/"+eventId:"");
+  var url="https://www.googleapis.com/calendar/v3/calendars/"+encodeURIComponent(gcalCalId||"primary")+"/events"+(eventId?"/"+eventId:"");
   return fetch(url,{method:eventId?"PATCH":"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(gcalEventBody(title,dateStr,timeStr))}).then(function(r){if(!r.ok)throw new Error("save failed");return r.json();});
 }
 function deleteGcalEvent(source,eventId){
   var token=source==="family"?famCalToken:calToken;
   if(!token)return Promise.reject(new Error("Not connected"));
-  return fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events/"+eventId,{method:"DELETE",headers:{Authorization:"Bearer "+token}}).then(function(r){if(!r.ok&&r.status!==410)throw new Error("delete failed");});
+  return fetch("https://www.googleapis.com/calendar/v3/calendars/"+encodeURIComponent(gcalCalId||"primary")+"/events/"+eventId,{method:"DELETE",headers:{Authorization:"Bearer "+token}}).then(function(r){if(!r.ok&&r.status!==410)throw new Error("delete failed");});
 }
 function outlookEventBody(title,dateStr,timeStr){
   if(timeStr){
@@ -1019,6 +1080,7 @@ ge("gc-save").addEventListener("click",function(){
   var t=ge("gc-title").value.trim(),d=ge("gc-date").value;
   if(!t||!d){ge("gc-err").textContent="Please enter a title and date.";ge("gc-err").style.display="block";return;}
   var tm=ge("gc-time").value,catWrap=ge("gc-cat-wrap");
+  if(!gcalEid&&ge("gc-calsel-wrap").style.display!=="none")gcalCalId=ge("gc-calsel").value;
   var whoN=[].map.call(ge("gc-who").querySelectorAll(".achip.sel[data-name]"),function(c){return c.dataset.name;});
   var fullTitle=whoN.length?"["+whoN.join(", ")+"] "+t:t;
   saveCalEventAny(gcalSource,gcalEid,fullTitle,d,tm).then(function(resp){
@@ -1033,7 +1095,7 @@ ge("gc-delete").addEventListener("click",function(){
   deleteCalEventAny(gcalSource,gcalEid).then(function(){closeModal("m-gcal");refreshCalSource(src);})
   .catch(function(){ge("gc-err").textContent="Could not delete. Try again.";ge("gc-err").style.display="block";});
 });
-var gcalEid=null,gcalSource="personal";
+var gcalEid=null,gcalSource="personal",gcalCalId="primary";
 function fillWho(cur,source){
   var sel=(cur||[]).slice();
   var names=(DATA.profiles||[]).map(function(p){return p.name;});
@@ -1049,7 +1111,7 @@ function openAddCalEvent(source,dk){
   ge("gc-title-h").textContent=source==="family"?"Add Family Calendar Event":"Add Calendar Event";
   ge("gc-title").value="";ge("gc-date").value=dk||tk();ge("gc-time").value="";
   ge("gc-delete").style.display="none";ge("gc-err").style.display="none";
-  fillWho([],source);
+  fillWho([],source);fillCalSel(source);
   var catWrap=ge("gc-cat-wrap");
   if(source==="personal"&&(DATA.calCategories||[]).length){catWrap.style.display="block";ge("gc-cat").innerHTML='<option value="">No category</option>'+(DATA.calCategories||[]).map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");}
   else catWrap.style.display="none";
@@ -1064,7 +1126,7 @@ function openEditCalEvent(id,source){
   ge("gc-date").value=dkey(ev.start);
   ge("gc-time").value=ev.allDay?"":(String(ev.start.getHours()).padStart(2,"0")+":"+String(ev.start.getMinutes()).padStart(2,"0"));
   ge("gc-delete").style.display="block";ge("gc-err").style.display="none";
-  fillWho(ev.people||[],source);
+  fillWho(ev.people||[],source);gcalCalId=ev.calId||"primary";ge("gc-calsel-wrap").style.display="none";
   var catWrap=ge("gc-cat-wrap");
   if(source==="personal"&&(DATA.calCategories||[]).length){
     var cur=(DATA.calEventCats||{})[id]||"";
@@ -1200,7 +1262,8 @@ function calcSc(){
   return{pct:totalAll?Math.round(totalDone/totalAll*100):0,members:members};
 }
 
-function launch(){ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage=(activeP&&activeP.role==="child")?"today":"family";renderAll();tryCal();tryFamCal();}
+function launch(){
+  hideBoot();try{if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);}catch(e){}ge("auth-screen").className="screen";ge("auth-screen").style.display="none";ge("profile-screen").className="screen";ge("profile-screen").style.display="none";ge("paywall-screen").style.display="none";ge("pin-screen").style.display="none";ge("app").style.display="flex";ge("app").style.flexDirection="column";if(user&&activeP)localStorage.setItem("sp_pid_"+user.uid,activeP.id);wCur=sow(new Date());aDay=(new Date().getDay()+6)%7;aPage=(activeP&&activeP.role==="child")?"today":"family";renderAll();tryCal();tryFamCal();}
 function renderAll(){if(!activeP)return;renderTB();renderSB();renderNav();renderPage();}
 function renderPage(){
   if(isFamilyProfile()&&aPage==="today")aPage="family";
@@ -1373,7 +1436,7 @@ function renderFamily(){
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 Family Calendar</span><div style="display:flex;gap:5px">';
   if(isPar&&famCalToken)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openAddCalEvent(\'family\',\''+dk+'\')">+ Add</button>';
   h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="showFamCalMonth()">View month</button></div></div><div class="card blue">';
-  if(!famCalToken)h+='<div class="empty">No family calendar connected.'+(isPar?' Connect one in Settings.':'')+'</div>';
+  if(!famCalToken&&!famMsToken&&!(famCalEvts||[]).length)h+='<div class="empty">No family calendar connected.'+(isPar?' Connect one in Settings.':'')+'</div>';
   else if(!famEvts.length)h+='<div class="empty">No family events today.</div>';
   else famEvts.forEach(function(ev){
     var col=evCol(ev);
@@ -1544,7 +1607,7 @@ function renderFamCalMonth(){
   var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
   h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.5rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
   if(canAdd)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue);margin-bottom:.5rem" onclick="openAddCalEvent(\'family\',\''+tk()+'\')">+ Add</button>';
-  if(!famCalToken)h+='<div class="empty">No family calendar connected yet.</div>';
+  if(!famCalToken&&!famMsToken&&!(famCalEvts||[]).length)h+='<div class="empty">No family calendar connected yet.</div>';
   else{
     h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
     for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=famEvOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'"><div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
@@ -1703,7 +1766,7 @@ function renderSettings(){
   if(!isFamilyProfile()){
     var myProv=calToken?"google":(msToken?"outlook":null);
     h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">My Calendar</span></div><div class="crow"><span style="font-size:20px">📅</span><div style="flex:1"><div style="font-size:13px;font-weight:600">'+(myProv?("Connected via "+(myProv==="google"?"Google":"Outlook")):'Not connected')+'</div><div style="font-size:11px;color:var(--muted)">Shows on your own Today &amp; Calendar tabs. Connect any account - it does not need to match your sign-in.</div></div>';
-    if(myProv==="google")h+='<button onclick="disCal()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button>';
+    if(myProv==="google")h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="openCalPicker(\'personal\')" style="padding:5px 11px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Choose calendars</button><button onclick="disCal()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button></div>';
     else if(myProv==="outlook")h+='<button onclick="disCalOutlook()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button>';
     else h+='<div style="display:flex;gap:6px"><button onclick="conCal()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Google</button><button onclick="conCalOutlook()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:#0078D4;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Outlook</button></div>';
     h+='</div></div>';
@@ -1720,7 +1783,7 @@ function renderSettings(){
     var famProv=famCalToken?"google":(famMsToken?"outlook":null);
     h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Family Calendar</span></div><div class="crow"><span style="font-size:20px">👪</span><div style="flex:1"><div style="font-size:13px;font-weight:600">'+(famProv?("Connected via "+(famProv==="google"?"Google":"Outlook")):'Not connected')+'</div><div style="font-size:11px;color:var(--muted)">The family\'s shared/main calendar - shows for everyone under the Family tab. Any parent can connect or change this.</div></div>';
     if(isParSet){
-      if(famProv==="google")h+='<button onclick="disFamCal()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button>';
+      if(famProv==="google")h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="openCalPicker(\'family\')" style="padding:5px 11px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Choose calendars</button><button onclick="disFamCal()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button></div>';
       else if(famProv==="outlook")h+='<button onclick="disFamCalOutlook()" style="padding:5px 11px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">Disconnect</button>';
       else h+='<div style="display:flex;gap:6px"><button onclick="conFamCal()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Google</button><button onclick="conFamCalOutlook()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:#0078D4;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Outlook</button></div>';
     }
@@ -1729,7 +1792,7 @@ function renderSettings(){
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 9 Oct 2026 - build 6</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 10 Oct 2026 - build 8</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
@@ -1823,6 +1886,7 @@ ge("rm-delete").addEventListener("click",function(){if(!eRid||!confirm("Delete r
 
 // ── SIGN OUT ALL ──
 function signOutAll(){
+  window.__manualSignOut=true;try{localStorage.removeItem("sp_signed_in");}catch(e){}
   if(user){
     localStorage.removeItem("sp_pid_"+user.uid);
     localStorage.removeItem("fct_"+user.uid);
