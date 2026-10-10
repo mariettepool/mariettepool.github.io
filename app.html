@@ -467,13 +467,14 @@ function selCC(c,el){var box=ge("cc-colors");if(box)box.dataset.sel=c;if(box)Arr
 function addCalCat(){
   var nm=ge("cc-name");if(!nm)return;var name=nm.value.trim();if(!name)return;
   var col=(ge("cc-colors")&&ge("cc-colors").dataset.sel)||CATCOLS[0];
-  DATA.calCategories=DATA.calCategories||[];
-  DATA.calCategories.push({id:uid(),name:name,color:col});
+  var pid=ownerPid();if(!pid)return;
+  catArr(pid,true).push({id:uid(),name:name,color:col});
   nm.value="";save();renderSettings();
 }
 function delCalCat(id){
-  DATA.calCategories=(DATA.calCategories||[]).filter(function(c){return c.id!==id;});
-  if(DATA.calEventCats)Object.keys(DATA.calEventCats).forEach(function(k){if(DATA.calEventCats[k]===id)delete DATA.calEventCats[k];});
+  var pid=ownerPid();if(!pid)return;
+  DATA.catsBy[pid]=catArr(pid).filter(function(c){return c.id!==id;});
+  var m=catMap(pid);Object.keys(m).forEach(function(k){if(m[k]===id)delete m[k];});
   save();renderSettings();renderAll();
 }
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -516,7 +517,7 @@ function subscribe(){
   var first=true;
   unsub=db.doc("users/"+dataOwnerUid+"/planner/data").onSnapshot(function(snap){
     DATA=snap.exists?Object.assign(nd(),snap.data()):nd();
-    hydrateFamCache();
+    hydrateFamCache();migrateCats();
     if(activeP){var fr=DATA.profiles.find(function(p){return p.id===activeP.id;});if(fr)activeP=fr;}
     if(first){
       first=false;
@@ -1114,7 +1115,7 @@ function openAddCalEvent(source,dk){
   ge("gc-delete").style.display="none";ge("gc-err").style.display="none";
   fillWho([],source);fillCalSel(source);
   var catWrap=ge("gc-cat-wrap");
-  if((DATA.calCategories||[]).length){catWrap.style.display="block";ge("gc-cat").innerHTML='<option value="">No category</option>'+(DATA.calCategories||[]).map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");}
+  if(source!=="family"&&CATS().length){catWrap.style.display="block";ge("gc-cat").innerHTML='<option value="">No category</option>'+CATS().map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("");}
   else catWrap.style.display="none";
   openModal("m-gcal");
 }
@@ -1129,18 +1130,37 @@ function openEditCalEvent(id,source){
   ge("gc-delete").style.display="block";ge("gc-err").style.display="none";
   fillWho(ev.people||[],source);gcalCalId=ev.calId||"primary";ge("gc-calsel-wrap").style.display="none";
   var catWrap=ge("gc-cat-wrap");
-  if((DATA.calCategories||[]).length){
-    var cur=(DATA.calEventCats||{})[id]||"";
+  if(source!=="family"&&CATS().length){
+    var cur=CEV()[id]||"";
     catWrap.style.display="block";
-    ge("gc-cat").innerHTML='<option value="">No category</option>'+(DATA.calCategories||[]).map(function(c){return'<option value="'+c.id+'"'+(c.id===cur?" selected":"")+'>'+esc(c.name)+'</option>';}).join("");
+    ge("gc-cat").innerHTML='<option value="">No category</option>'+CATS().map(function(c){return'<option value="'+c.id+'"'+(c.id===cur?" selected":"")+'>'+esc(c.name)+'</option>';}).join("");
   }else catWrap.style.display="none";
   openModal("m-gcal");
 }
 
 
+// ── PER-PERSON CATEGORIES (each profile has its own list; family calendar uses profile colours only) ──
+var CAT_OFF=false,catOwner=null;
+function viewerCatPid(){return(CAT_OFF||!activeP||isFamilyProfile())?null:activeP.id;}
+function catArr(pid,create){if(create){DATA.catsBy=DATA.catsBy||{};if(!DATA.catsBy[pid])DATA.catsBy[pid]=[];}return(DATA.catsBy&&DATA.catsBy[pid])||[];}
+function catMap(pid,create){if(create){DATA.catEvBy=DATA.catEvBy||{};if(!DATA.catEvBy[pid])DATA.catEvBy[pid]={};}return(DATA.catEvBy&&DATA.catEvBy[pid])||{};}
+function CATS(){var p=viewerCatPid();return p?catArr(p):[];}
+function CEV(){var p=viewerCatPid();return p?catMap(p):{};}
+function manageablePids(){if(!activeP||activeP.role!=="parent"||isFamilyProfile())return[];return(DATA.profiles||[]).filter(function(p){return p.id===activeP.id||p.role!=="parent";});}
+function ownerPid(){var ok=manageablePids().map(function(p){return p.id;});return(catOwner&&ok.indexOf(catOwner)>=0)?catOwner:(activeP?activeP.id:null);}
+function setCatOwner(id){catOwner=id;renderSettings();}
+function migrateCats(){
+  if(DATA.catsBy)return;
+  var cats=DATA.calCategories||[],ev=DATA.calEventCats||{};
+  DATA.catsBy={};DATA.catEvBy={};
+  if(!cats.length&&!Object.keys(ev).length)return;
+  (DATA.profiles||[]).forEach(function(p){if(p.role==="parent"){DATA.catsBy[p.id]=cats.map(function(c){return{id:c.id,name:c.name,color:c.color};});DATA.catEvBy[p.id]=Object.assign({},ev);}});
+}
+function setEvCatQ(eid,cv){var pid=viewerCatPid();if(!pid)return;var m=catMap(pid,true);if(cv)m[eid]=cv;else delete m[eid];}
+
 // ── EVENT TAGS: person chips (who) + category chip (what) ──
 function evPeople(ev){return(ev&&ev.people&&ev.people.length)?ev.people:((ev&&ev.person)?[ev.person]:[]);}
-function evCat(ev){if(!ev||!ev.id||!DATA.calEventCats||!DATA.calEventCats[ev.id])return null;return(DATA.calCategories||[]).find(function(c){return c.id===DATA.calEventCats[ev.id];})||null;}
+function evCat(ev){var m=CEV();if(!ev||!ev.id||!m[ev.id])return null;return CATS().find(function(c){return c.id===m[ev.id];})||null;}
 function onCol(c){var h=String(c||"#000").replace("#","");if(h.length!==6)return"#fff";var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);return(0.299*r+0.587*g+0.114*b)>160?"#2F2F2F":"#fff";}
 function evPCol(ev){var p=evPeople(ev);return p.length===1?pc(p[0]):(p.length>1?"#2F2F2F":"transparent");}
 function evTags(ev){
@@ -1154,21 +1174,38 @@ function evTags(ev){
   return h;
 }
 function catLegendHtml(){
-  var cats=DATA.calCategories||[];if(!cats.length)return"";
+  var cats=CATS();if(!cats.length)return"";
   return'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.25rem 0 .625rem;font-size:11px;color:var(--muted)">'+cats.map(function(c){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:3px;background:'+c.color+';display:inline-block"></span>'+esc(c.name)+'</span>';}).join('')+'</div>';
 }
 function addStarterCats(){
-  DATA.calCategories=DATA.calCategories||[];
+  var pid=ownerPid();if(!pid)return;var arr=catArr(pid,true);
   [["Sport","#2A9D5C"],["Exams / School","#E8000A"],["Birthdays","#EC4899"],["Social","#F97316"],["Appointments","#2563EB"],["Family","#6B7280"]].forEach(function(x){
-    if(!DATA.calCategories.some(function(c){return c.name===x[0];}))DATA.calCategories.push({id:uid(),name:x[0],color:x[1]});
+    if(!arr.some(function(c){return c.name===x[0];}))arr.push({id:uid(),name:x[0],color:x[1]});
   });
   save();renderSettings();renderAll();
 }
+
+// ── QUICK EDIT / CATEGORISE ANY EVENT (calendar + app events) ──
+var famSelDay=null;
+function evCatSel(ev){
+  if(!viewerCatPid()||!CATS().length)return"";
+  var cur=CEV()[ev.id]||"";
+  var h='<select onclick="event.stopPropagation()" onchange="event.stopPropagation();setEvCat(\''+ev.id+'\',this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;margin-left:4px;max-width:96px"><option value="">No category</option>';
+  CATS().forEach(function(c){h+='<option value="'+c.id+'"'+(c.id===cur?" selected":"")+'>'+esc(c.name)+'</option>';});
+  return h+'</select>';
+}
+function evRowClick(ev,source){
+  if(!canEdit())return"";
+  return ev.isApp?' style="cursor:pointer" onclick="openEditEvent(\''+ev.id+'\')"':' style="cursor:pointer" onclick="openEditCalEvent(\''+ev.id+'\',\''+source+'\')"';
+}
+function selFamDay(ds){famSelDay=ds;renderCalendar();}
+function cycleCatCol(id){
+  var pid=ownerPid();var c=catArr(pid).find(function(x){return x.id===id;});if(!c)return;
+  var i=CATCOLS.indexOf(c.color);c.color=CATCOLS[(i+1)%CATCOLS.length];
+  save();renderSettings();renderAll();
+}
 function evCol(ev){
-  if(ev.id&&DATA.calEventCats&&DATA.calEventCats[ev.id]){
-    var cat=(DATA.calCategories||[]).find(function(c){return c.id===DATA.calEventCats[ev.id];});
-    if(cat)return cat.color;
-  }
+  var cat=evCat(ev);if(cat)return cat.color;
   return ev.person?((ev.people&&ev.people.length>1)?"#2F2F2F":pc((ev.people&&ev.people[0])||ev.person)):"#000";
 }
 function myTodayEvents(dt){
@@ -1361,12 +1398,7 @@ function renderToday(){
     var col=evCol(ev);
     h+='<div class="ev-row" style="cursor:pointer" onclick="'+(ev.isApp?(isK?"openEditEventForSelf('"+ev.id+"')":"openEditEvent('"+ev.id+"')"):(!isK?"openEditCalEvent('"+ev.id+"','personal')":"goPage('calendar')"))+'"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
     h+=evTags(ev);
-    if(!ev.isApp&&(DATA.calCategories||[]).length){
-      h+='<select onclick="event.stopPropagation()" onchange="event.stopPropagation();setEvCat(\''+ev.id+'\',this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;margin-right:4px;max-width:90px">';
-      h+='<option value="">No category</option>';
-      (DATA.calCategories||[]).forEach(function(c){var csel=DATA.calEventCats&&DATA.calEventCats[ev.id]===c.id;h+='<option value="'+c.id+'"'+(csel?' selected':'')+'>'+esc(c.name)+'</option>';});
-      h+='</select>';
-    }
+    h+=evCatSel(ev);
     h+='</div>';
   });
   h+='</div>';
@@ -1469,12 +1501,7 @@ function renderFamily(){
   else famEvts.forEach(function(ev){
     var col=evCol(ev);
     h+='<div class="ev-row"'+(isPar?' style="cursor:pointer" onclick="openEditCalEvent(\''+ev.id+'\',\'family\')"':'')+'><div class="ev-dot" style="background:'+col+'"></div><span class="ev-name">'+esc(ev.name)+'</span>'+evTags(ev);
-    if(isPar&&(DATA.calCategories||[]).length){
-      h+='<select onclick="event.stopPropagation()" onchange="event.stopPropagation();setEvCat(\''+ev.id+'\',this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;max-width:90px">';
-      h+='<option value="">No category</option>';
-      (DATA.calCategories||[]).forEach(function(c){var csel=DATA.calEventCats&&DATA.calEventCats[ev.id]===c.id;h+='<option value="'+c.id+'"'+(csel?' selected':'')+'>'+esc(c.name)+'</option>';});
-      h+='</select>';
-    }
+    
     h+='</div>';
   });
   h+='</div>';
@@ -1569,8 +1596,7 @@ ge("ec-desc").addEventListener("keydown",function(e){if(e.key==="Enter")ge("ec-s
 
 // ── CALENDAR EVENT CATEGORY TAGGING ──
 function setEvCat(eventId,catId){
-  DATA.calEventCats=DATA.calEventCats||{};
-  if(catId)DATA.calEventCats[eventId]=catId;else delete DATA.calEventCats[eventId];
+  setEvCatQ(eventId,catId);
   save();renderAll();
 }
 
@@ -1609,10 +1635,10 @@ function renderCalendar(){
   if(!evts.length)h+='<div class="empty">No events on this day.</div>';
   else evts.forEach(function(ev){
     var col=evCol(ev);
-    h+='<div class="ev-row"><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
+    h+='<div class="ev-row"'+evRowClick(ev,"personal")+'><div class="ev-dot" style="'+(ev.isApp?'border:2px solid '+col+';background:transparent':'background:'+col)+'"></div><span class="ev-name">'+esc(ev.name)+'</span>';
     if(!ev.allDay)h+='<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>';
-    h+=evTags(ev);
-    if(ev.isApp)h+='<button class="del-btn" onclick="delAE(\''+ev.id+'\')">x</button>';
+    h+=evTags(ev);h+=evCatSel(ev);
+    if(ev.isApp)h+='<button class="del-btn" onclick="event.stopPropagation();delAE(\''+ev.id+'\')">x</button>';
     h+='</div>';
   });
   h+='</div>';
@@ -1623,7 +1649,7 @@ function renderCalendar(){
   h+='</div>';
   var ppl=[...new Set([].concat.apply([],calEvts.map(function(e){return e.people||[];})))];
   if(ppl.length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.625rem 0;font-size:11px;color:var(--muted)">'+ppl.map(function(n){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:'+pc(n)+';display:inline-block"></span>'+esc(n)+'</span>';}).join('')+'</div>';
-  if((DATA.calCategories||[]).length)h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:.25rem 0 .625rem;font-size:11px;color:var(--muted)">'+(DATA.calCategories||[]).map(function(c){return'<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:3px;background:'+c.color+';display:inline-block"></span>'+esc(c.name)+'</span>';}).join('')+'</div>';
+  h+=catLegendHtml();
   ge("page-calendar").innerHTML=h;
 }
 function renderFamCalMonth(){
@@ -1639,7 +1665,17 @@ function renderFamCalMonth(){
   if(!famCalToken&&!famMsToken&&!(famCalEvts||[]).length)h+='<div class="empty">No family calendar connected yet.</div>';
   else{
     h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
-    for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=famEvOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+';border-left:3px solid '+evPCol(ev)+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'"><div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
+    for(var ci=0;ci<42;ci++){var cd=new Date(gs);cd.setDate(gs.getDate()+ci);var inM=cd.getMonth()===mo,isT=cd.getTime()===td.getTime();var cevts=famEvOn(cd);var clbls=cevts.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+';border-left:3px solid '+evPCol(ev)+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM?"":" om")+(isT?" today":"")+'" style="cursor:pointer'+(dkey(cd)===(famSelDay||dkey(td))?';outline:2px solid var(--blue)':'')+'" onclick="selFamDay(\''+dkey(cd)+'\')"><div class="mc-date">'+cd.getDate()+'</div>'+clbls+(cevts.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts.length-3)+'</div>':'')+'</div>';}
+    h+='</div>';
+    var sdk=famSelDay||dkey(td),sp=sdk.split("-"),sdt=new Date(parseInt(sp[0]),parseInt(sp[1])-1,parseInt(sp[2]));
+    var sev=famEvOn(sdt);
+    h+='<div class="sec-hdr" style="margin-top:.875rem"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 '+sdt.toLocaleDateString([],{weekday:"long",day:"numeric",month:"short"})+'</span></div><div class="card blue">';
+    if(!sev.length)h+='<div class="empty">No events on this day.</div>';
+    sev.forEach(function(ev){
+      var col=evCol(ev);
+      h+='<div class="ev-row"'+evRowClick(ev,"family")+'><div class="ev-dot" style="background:'+col+'"></div><span class="ev-name">'+esc(ev.name)+'</span>'+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+evTags(ev)+evCatSel(ev)+'</div>';
+    });
+    if(sev.length&&canEdit())h+='<div style="font-size:10px;color:var(--muted);margin-top:.4rem">Tap an event to edit it, or use the dropdown to give it a category colour.</div>';
     h+='</div>';
   }
   h+=catLegendHtml();ge("page-calendar").innerHTML=h;
@@ -1657,7 +1693,7 @@ function renderKidCalendar(){
     h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
     devts.forEach(function(ev){
       var col=evCol(ev);
-      h+='<div class="ev-row"><div class="ev-dot" style="border:2px solid '+col+';background:transparent"></div><span class="ev-name">'+esc(ev.name)+'</span>'+evTags(ev)+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+'</div>';
+      h+='<div class="ev-row"><div class="ev-dot" style="border:2px solid '+col+';background:transparent"></div><span class="ev-name">'+esc(ev.name)+'</span>'+evTags(ev)+evCatSel(ev)+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+'</div>';
     });
   }
   if(!any)h+='<div class="empty">No events this week.</div>';
@@ -1800,11 +1836,14 @@ function renderSettings(){
     else h+='<div style="display:flex;gap:6px"><button onclick="conCal()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Google</button><button onclick="conCalOutlook()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:#0078D4;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Outlook</button></div>';
     h+='</div></div>';
   }
-  if(canEdit()){
+  if(manageablePids().length){
+    var coPid=ownerPid();
     h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Calendar Categories</span></div><div style="padding:.75rem 1rem">';
-    h+='<div style="font-size:12px;color:var(--muted);margin-bottom:.6rem;line-height:1.5">Create colour categories like Birthdays, Work or School. When you add or edit any calendar event or reminder (personal or family), pick a category to colour-code it.</div>';
-    if(!(DATA.calCategories||[]).length)h+='<button onclick="addStarterCats()" style="width:100%;padding:10px;border-radius:var(--radius);border:1.5px dashed var(--blue);background:var(--blue-bg);color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:.6rem">+ Add suggested categories (Sport, Exams, Birthdays, Social, Appointments, Family)</button>';
-    (DATA.calCategories||[]).forEach(function(c){h+='<div class="crow" style="padding:6px 0"><span style="width:14px;height:14px;border-radius:50%;background:'+c.color+';flex-shrink:0"></span><span style="flex:1;font-size:13px;margin-left:8px">'+esc(c.name)+'</span><button class="del-btn" onclick="delCalCat(\''+c.id+'\')">x</button></div>';});
+    h+='<div style="font-size:12px;color:var(--muted);margin-bottom:.6rem;line-height:1.5">Colour categories (like Sport, Exams or Birthdays) are personal: each person has their own list and colours, shown only on their own pages. The Family calendar keeps using everyone\'s profile colours. Tap a category\'s colour dot to change its colour.</div>';
+    if(manageablePids().length>1){h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">Categories for:</div><div class="achips" style="margin-bottom:.6rem">'+manageablePids().map(function(p){return'<span class="achip'+(p.id===coPid?" sel":"")+'" style="background:'+p.color+'22;color:'+p.color+'" onclick="setCatOwner(\''+p.id+'\')">'+esc(p.id===activeP.id?"Me":p.name)+'</span>';}).join("")+'</div>';}
+    var coList=catArr(coPid);
+    if(!coList.length)h+='<button onclick="addStarterCats()" style="width:100%;padding:10px;border-radius:var(--radius);border:1.5px dashed var(--blue);background:var(--blue-bg);color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:.6rem">+ Add suggested categories (Sport, Exams, Birthdays, Social, Appointments, Family)</button>';
+    coList.forEach(function(c){h+='<div class="crow" style="padding:6px 0"><span onclick="cycleCatCol(\''+c.id+'\')" title="Tap to change colour" style="width:18px;height:18px;border-radius:50%;background:'+c.color+';flex-shrink:0;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px var(--border)"></span><span style="flex:1;font-size:13px;margin-left:8px">'+esc(c.name)+'</span><button class="del-btn" onclick="delCalCat(\''+c.id+'\')">x</button></div>';});
     h+='<div id="cc-colors" data-sel="'+CATCOLS[0]+'" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">'+CATCOLS.map(function(c,i){return'<div class="copt'+(i===0?" sel":"")+'" onclick="selCC(\''+c+'\',this)" style="background:'+c+'"></div>';}).join("")+'</div>';
     h+='<div class="add-row"><input class="add-inp" id="cc-name" placeholder="Category name..." onkeydown="if(event.key===\'Enter\')addCalCat()"><button class="add-btn" onclick="addCalCat()">Add</button></div>';
     h+='</div></div>';
@@ -1822,7 +1861,7 @@ function renderSettings(){
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 10 Oct 2026 - build 9</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 10 Oct 2026 - build 11</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
@@ -1847,9 +1886,9 @@ ge("fm-title").addEventListener("keydown",function(e){if(e.key==="Enter")ge("fm-
 var editEid=null;
 function openEventM(dk){editEid=null;ge("em-title-h").textContent="Add Event";ge("em-title").value="";ge("em-date").value=dk||tk();ge("em-time").value="";bldChips("em-chips",[]);var cw=ge("em-chips").parentElement;if(cw)cw.style.display="";fillEmCat(null,canEdit());ge("em-delete").style.display="none";openModal("m-event");setTimeout(function(){ge("em-title").focus();},100);}
 function fillEmCat(id,show){
-  var w=ge("em-cat-wrap");var cats=DATA.calCategories||[];
+  var w=ge("em-cat-wrap");var cats=CATS();
   if(!show||!cats.length){w.style.display="none";ge("em-cat").innerHTML="";return;}
-  var cur=id?((DATA.calEventCats||{})[id]||""):"";
+  var cur=id?(CEV()[id]||""):"";
   ge("em-cat").innerHTML='<option value="">No category</option>'+cats.map(function(c){return'<option value="'+c.id+'"'+(c.id===cur?" selected":"")+'>'+esc(c.name)+'</option>';}).join("");
   w.style.display="block";
 }
@@ -1876,7 +1915,7 @@ ge("em-save").addEventListener("click",function(){
   var eid=editEid||uid();
   if(editEid){var idx=DATA.appEvents.findIndex(function(x){return x.id===editEid;});if(idx>=0)DATA.appEvents[idx]={id:editEid,title:t,date:d,time:ge("em-time").value,assigneeIds:gChips("em-chips")};}
   else DATA.appEvents.push({id:eid,title:t,date:d,time:ge("em-time").value,assigneeIds:gChips("em-chips")});
-  if(ge("em-cat-wrap").style.display!=="none"){DATA.calEventCats=DATA.calEventCats||{};var cv=ge("em-cat").value;if(cv)DATA.calEventCats[eid]=cv;else delete DATA.calEventCats[eid];}
+  if(ge("em-cat-wrap").style.display!=="none"){setEvCatQ(eid,ge("em-cat").value);}
   save();closeModal("m-event");renderAll();
 });
 ge("em-delete").addEventListener("click",function(){if(!editEid)return;delAE(editEid);closeModal("m-event");});
@@ -1937,6 +1976,9 @@ function signOutAll(){
 }
 
 ge("auth-screen").className="screen active";
+
+// Family views never use personal categories: events keep each person's profile colour
+(function(){["renderFamily","renderFamCalMonth"].forEach(function(n){var f=window[n];if(typeof f!=="function")return;window[n]=function(){CAT_OFF=true;try{return f.apply(this,arguments);}finally{CAT_OFF=false;}};});})();
 </script>
 
 <div id="reward-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;padding:2rem">
