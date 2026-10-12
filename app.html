@@ -352,6 +352,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
     </div>
   </div>
   <div class="mf"><label class="ml">Name</label><input class="mi" id="pm-name" type="text" placeholder="e.g. Luke"></div>
+  <div class="mf"><label class="ml">Birthday (optional)</label><input class="mi" id="pm-bday" type="date"></div>
   <div class="mf"><label class="ml">Role</label><select class="msel" id="pm-role"><option value="parent">Parent (full access)</option><option value="child">Child (chores and events only)</option></select></div>
   <div class="mf"><label class="ml">Profile colour</label><div class="cgrid" id="pm-colors"></div></div>
   <div class="mf"><label class="ml">PIN (4 digits, leave blank for no PIN)</label><input class="mi" id="pm-pin" type="number" placeholder="e.g. 1234"></div>
@@ -362,9 +363,27 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 <div class="modal" id="m-earning"><div class="mbox">
   <div class="mhandle"></div><div class="mtitle" id="ec-title">Add Earning Chore</div>
   <div class="mf"><label class="ml">Chore description</label><input class="mi" id="ec-desc" type="text" placeholder="e.g. Clean out the garage"></div>
-  <div class="mf"><label class="ml">Reward</label><select class="msel" id="ec-reward-type"></select></div>
+  <div class="mf"><label class="ml">Reward</label><select class="msel" id="ec-reward-type" onchange="ecTypeChg()"></select></div>
+  <div class="mf" id="ec-amt-wrap"><label class="ml" id="ec-amt-l">Amount</label><input class="mi" id="ec-amt" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 20"></div>
   <div class="mf"><label class="ml">Reward detail</label><input class="mi" id="ec-reward-detail" type="text" placeholder="e.g. R20 or 1 hour extra"></div>
   <div class="mbtns"><button class="mcancel" onclick="closeModal('m-earning')">Cancel</button><button class="msave" id="ec-save">Add</button></div>
+</div></div>
+
+<div class="modal" id="m-rw"><div class="mbox">
+  <div class="mhandle"></div><div class="mtitle" id="rw-title">Reward</div>
+  <div class="mf" id="rw-type-wrap"><label class="ml">Type</label><select class="msel" id="rw-type" onchange="rwTypeChg()"><option value="money">Money (R)</option><option value="screen">Screen time (minutes)</option></select></div>
+  <div class="mf"><label class="ml" id="rw-amt-l">Amount</label><input class="mi" id="rw-amt" type="number" inputmode="decimal" min="0" step="any"></div>
+  <div class="mf"><label class="ml" id="rw-note-l">Note (optional)</label><input class="mi" id="rw-note" type="text"></div>
+  <div id="rw-hint" style="font-size:12px;color:var(--muted);margin-bottom:.5rem"></div>
+  <div id="rw-err" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>
+  <div class="mbtns"><button class="mcancel" onclick="closeModal('m-rw')">Cancel</button><button class="msave" onclick="saveRw()">Save</button></div>
+</div></div>
+
+<div class="modal" id="m-rwh"><div class="mbox">
+  <div class="mhandle"></div><div class="mtitle" id="rwh-title">History</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem"><button class="mini-btn" onclick="rwHMove(-1)">‹</button><b id="rwh-month" style="font-size:14px"></b><button class="mini-btn" onclick="rwHMove(1)">›</button></div>
+  <div id="rwh-body" style="max-height:55vh;overflow:auto"></div>
+  <div class="mbtns"><button class="mcancel" onclick="closeModal('m-rwh')" style="flex:1">Close</button></div>
 </div></div>
 
 <div class="modal" id="m-calpick"><div class="mbox">
@@ -438,11 +457,11 @@ function bldPM(){ge("pm-colors").innerHTML=PCOLS.map(function(c){var s=(ge("pm-c
 function selPC(c){ge("pm-colors").dataset.sel=c;bldPM();}
 function updatePmPreview(){var pv=ge("pm-photo-preview");if(pPhoto)pv.innerHTML='<img src="'+pPhoto+'" style="width:100%;height:100%;object-fit:cover">';else pv.textContent="photo";}
 function clearPhoto(){pPhoto=null;updatePmPreview();}
-function openAddProfile(){editPid=null;pPhoto=null;ge("pm-title").textContent="Add Family Member";ge("pm-name").value="";ge("pm-role").value="child";ge("pm-pin").value="";ge("pm-colors").dataset.sel=PCOLS[0];bldPM();updatePmPreview();ge("pm-delete").style.display="none";openModal("m-profile");}
+function openAddProfile(){editPid=null;pPhoto=null;ge("pm-title").textContent="Add Family Member";ge("pm-name").value="";ge("pm-bday").value="";ge("pm-role").value="child";ge("pm-pin").value="";ge("pm-colors").dataset.sel=PCOLS[0];bldPM();updatePmPreview();ge("pm-delete").style.display="none";openModal("m-profile");}
 function openEditProfile(id){
   var p=(DATA.profiles||[]).find(function(x){return x.id===id;});if(!p)return;
   editPid=id;pPhoto=p.photo||null;
-  ge("pm-title").textContent="Edit "+p.name;ge("pm-name").value=p.name;ge("pm-role").value=p.role;ge("pm-pin").value=p.pin||"";
+  ge("pm-title").textContent="Edit "+p.name;ge("pm-name").value=p.name;ge("pm-bday").value=p.bday||"";ge("pm-role").value=p.role;ge("pm-pin").value=p.pin||"";
   ge("pm-colors").dataset.sel=p.color||PCOLS[0];bldPM();updatePmPreview();
   ge("pm-delete").style.display="block";openModal("m-profile");
 }
@@ -455,7 +474,7 @@ ge("pm-photo-inp").addEventListener("change",function(e){
 ge("pm-save").addEventListener("click",function(){
   var nm=ge("pm-name").value.trim();if(!nm)return;
   var col=ge("pm-colors").dataset.sel||PCOLS[0],role=ge("pm-role").value,pin=ge("pm-pin").value.replace(/\D/g,"").slice(0,4);
-  var prof={name:nm,photo:pPhoto||null,color:col,role:role,pin:pin};
+  var prof={name:nm,photo:pPhoto||null,color:col,role:role,pin:pin,bday:ge("pm-bday").value||""};
   DATA.profiles=DATA.profiles||[];
   if(editPid){var idx=DATA.profiles.findIndex(function(x){return x.id===editPid;});if(idx>=0)DATA.profiles[idx]=Object.assign({},DATA.profiles[idx],prof);}
   else DATA.profiles.push(Object.assign({id:uid()},prof));
@@ -1234,6 +1253,7 @@ function addStarterCats(){
 // ── QUICK EDIT / CATEGORISE ANY EVENT (calendar + app events) ──
 var famSelDay=null;
 function evCatSel(ev){
+  if(ev&&ev.isBday)return"";
   if(!viewerCatPid()||!CATS().length)return"";
   var cur=CEV()[ev.id]||"";
   var h='<select onclick="event.stopPropagation()" onchange="event.stopPropagation();setEvCat(\''+ev.id+'\',this.value)" style="font-size:10px;border:1px solid var(--border);border-radius:8px;padding:2px 4px;margin-left:4px;max-width:96px"><option value="">No category</option>';
@@ -1241,7 +1261,7 @@ function evCatSel(ev){
   return h+'</select>';
 }
 function evRowClick(ev,source){
-  if(!canEdit())return"";
+  if(!canEdit()||(ev&&ev.isBday))return"";
   return ev.isApp?' style="cursor:pointer" onclick="openEditEvent(\''+ev.id+'\')"':' style="cursor:pointer" onclick="openEditCalEvent(\''+ev.id+'\',\''+source+'\')"';
 }
 function selFamDay(ds){famSelDay=ds;renderCalendar();}
@@ -1421,6 +1441,7 @@ function renderToday(){
   var hr=dt.getHours(),gr=hr<12?"morning":hr<17?"afternoon":"evening";
   h+='<div style="padding:.5rem 0 .75rem"><div style="font-size:11px;color:var(--muted);font-weight:500">'+dt.toLocaleDateString([],{weekday:"long",day:"numeric",month:"long",year:"numeric"})+'</div>';
   h+='<div style="font-family:\'Lora\',serif;font-size:20px;margin-top:.2rem">Good '+gr+', '+esc(activeP.name)+'!</div></div>';
+  h+=bdayBanner();
   if(!isK){
     var fi=(DATA.focusItems||[]).filter(function(f){return f.profileId===activeP.id&&f.date===dk;});
     h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--red-bg);color:var(--red)">🎯 Daily Focus</span><button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openFocusM()">+ Add</button></div>';
@@ -1603,7 +1624,7 @@ function renderEarningChores(isKid){
     var canClaim=claimable&&!ec.claimedBy&&!ec.approved;
     h+='<div class="task-row" style="cursor:'+(canClaim?'pointer':'default')+'" '+(canClaim?'onclick="claimEC(\''+ec.id+'\')"':'')+'>'+
       '<span class="ttext">'+esc(ec.desc)+'</span>'+
-      '<span style="font-size:11px;color:var(--muted);margin-right:6px">'+esc(ec.rewardType)+(ec.rewardDetail?': '+esc(ec.rewardDetail):'')+'</span>';
+      '<span style="font-size:11px;color:var(--muted);margin-right:6px">'+esc(ec.rewardType)+(ec.rewardAmt!=null&&rwKind(ec.rewardType)!=="tick"?': '+fmtAmt(rwKind(ec.rewardType),ec.rewardAmt):'')+(ec.rewardDetail?' ('+esc(ec.rewardDetail)+')':'')+'</span>';
     if(ec.claimedBy){
       var claimant=(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;});
       h+='<span style="font-size:10px;color:var(--muted)">'+(ec.approved?'✅ ':'⏳ ')+(claimant?esc(claimant.name):'')+'</span>';
@@ -1613,19 +1634,27 @@ function renderEarningChores(isKid){
     h+='</div>';
   });
   h+='</div>';
+  h+=renderRewardCards(isKid);
   return h;
 }
 function openEarningModal(){
   ge("ec-title").textContent="Add Earning Chore";ge("ec-desc").value="";ge("ec-reward-detail").value="";
   var rt=DATA.rewardTypes||["Money","Screen time","Playdate","Family date"];
   ge("ec-reward-type").innerHTML=rt.map(function(r){return'<option>'+esc(r)+'</option>';}).join("");
+  ge("ec-amt").value="";ecTypeChg();
   openModal("m-earning");
 }
 function claimEC(id){var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec||ec.claimedBy)return;ec.claimedBy=activeP.id;save();renderAll();}
 function approveEC(id){
-  var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec)return;
-  ec.approved=true;save();renderAll();
+  var ec=(DATA.earningChores||[]).find(function(x){return x.id===id;});if(!ec||ec.approved)return;
+  ec.approved=true;
   var claimant=(DATA.profiles||[]).find(function(p){return p.id===ec.claimedBy;});
+  if(claimant){
+    var rk=rwKind(ec.rewardType);
+    if(rk==="tick")rwLog(claimant.id,"earn","tick",1,ec.desc,{given:false,tickName:ec.rewardType,chore:ec.id});
+    else rwLog(claimant.id,"earn",rk,(ec.rewardAmt!=null?ec.rewardAmt:rwParse(ec.rewardDetail,rk)),ec.desc,{chore:ec.id});
+  }
+  save();renderAll();
   ge("rp-emoji").textContent="🎉";
   ge("rp-name").textContent=claimant?claimant.name:"";
   ge("rp-reward").textContent=ec.desc+" - "+ec.rewardType+(ec.rewardDetail?": "+ec.rewardDetail:"");
@@ -1635,10 +1664,144 @@ function delEC(id){DATA.earningChores=(DATA.earningChores||[]).filter(function(x
 ge("ec-save").addEventListener("click",function(){
   var desc=ge("ec-desc").value.trim();if(!desc)return;
   DATA.earningChores=DATA.earningChores||[];
-  DATA.earningChores.push({id:uid(),desc:desc,rewardType:ge("ec-reward-type").value,rewardDetail:ge("ec-reward-detail").value.trim(),claimedBy:null,approved:false});
+  DATA.earningChores.push({id:uid(),desc:desc,rewardType:ge("ec-reward-type").value,rewardDetail:ge("ec-reward-detail").value.trim(),rewardAmt:(rwKind(ge("ec-reward-type").value)!=="tick"&&ge("ec-amt").value!=="")?parseFloat(ge("ec-amt").value):null,claimedBy:null,approved:false});
   save();closeModal("m-earning");renderAll();
 });
 ge("ec-desc").addEventListener("keydown",function(e){if(e.key==="Enter")ge("ec-save").click();});
+
+
+// ── REWARD LEDGER: tracks money / screen time earned, lost and paid out per child ──
+function rwKind(t){t=String(t||"").toLowerCase();return/money|cash|pocket|rand/.test(t)?"money":/screen/.test(t)?"screen":"tick";}
+function fmtMoney(n){var neg=n<0;n=Math.abs(n);var t=(Math.round(n*100)%100)?n.toFixed(2):String(Math.round(n));return(neg?"-":"")+"R"+t;}
+function fmtMin(m){var neg=m<0;m=Math.abs(Math.round(m));var h=Math.floor(m/60),r=m%60;var t=h?(r?h+"h "+r+"m":h+"h"):r+" min";return(neg?"-":"")+t;}
+function fmtAmt(k,n){return k==="money"?fmtMoney(n):fmtMin(n);}
+function rwParse(txt,k){
+  txt=String(txt||"").toLowerCase();var m;
+  if(k==="screen"){
+    var tot=0,f=false;
+    if((m=txt.match(/(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/))){tot+=parseFloat(m[1].replace(",","."))*60;f=true;}
+    if((m=txt.match(/(\d+)\s*(?:m|min|mins|minutes)\b/))){tot+=parseInt(m[1],10);f=true;}
+    if(!f&&(m=txt.match(/(\d+)/)))tot=parseInt(m[1],10);
+    return tot;
+  }
+  m=txt.match(/(\d+(?:[.,]\d+)?)/);return m?parseFloat(m[1].replace(",",".")):0;
+}
+function rwLog(pid,kind,type,amt,label,extra){
+  DATA.rewardLog=DATA.rewardLog||[];
+  var e={id:uid(),pid:pid,date:tk(),ts:Date.now(),kind:kind,type:type,amt:amt,label:label||""};
+  if(extra)for(var k in extra)e[k]=extra[k];
+  DATA.rewardLog.push(e);return e;
+}
+function rwWeekKey(ds){var d=new Date(ds+"T00:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));return dkey(d);}
+function rwSum(pid,type,filter){
+  var r={earn:0,lost:0,paid:0};
+  (DATA.rewardLog||[]).forEach(function(e){
+    if(e.pid!==pid||e.type!==type||(filter&&!filter(e)))return;
+    if(e.kind==="earn")r.earn+=e.amt;else if(e.kind==="deduct")r.lost+=e.amt;else if(e.kind==="paid")r.paid+=e.amt;
+  });
+  return r;
+}
+function rwBal(pid,type){var a=rwSum(pid,type);return a.earn-a.lost-a.paid;}
+function rwLine(k,w,m){
+  function one(lbl,x){var t=lbl+' <b>'+fmtAmt(k,x.earn)+'</b>';if(x.lost)t+=' <span style="color:var(--red)">-'+fmtAmt(k,x.lost)+'</span>';return t;}
+  return'<div style="font-size:11px;color:var(--muted)">'+one("This week",w)+' &nbsp;·&nbsp; '+one("This month",m)+'</div>';
+}
+function renderRewardCards(isKid){
+  var par=!isKid||isFamilyProfile();
+  var kids=(DATA.profiles||[]).filter(function(p){return p.role!=="parent";});
+  if(!par&&activeP)kids=kids.filter(function(p){return p.id===activeP.id;});
+  if(!kids.length)return"";
+  var wk=rwWeekKey(tk()),mo=tk().slice(0,7);
+  var h='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">💰 Rewards tally</span></div>';
+  kids.forEach(function(p){
+    h+='<div class="card mustard"><div style="font-weight:700;font-size:14px;color:'+p.color+';margin-bottom:.4rem">'+av(p)+' '+esc(p.name)+'</div>';
+    var any=false;
+    [["money","💵 Money"],["screen","📱 Screen time"]].forEach(function(t){
+      var all=rwSum(p.id,t[0]);
+      if(!all.earn&&!all.lost&&!all.paid)return;any=true;
+      var w=rwSum(p.id,t[0],function(e){return rwWeekKey(e.date)===wk;});
+      var m=rwSum(p.id,t[0],function(e){return e.date.slice(0,7)===mo;});
+      var owed=all.earn-all.lost-all.paid;
+      h+='<div style="padding:.35rem 0;border-top:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;font-weight:600">'+t[1]+'</span><span style="font-size:13px;font-weight:700;color:'+(owed<0?'var(--red)':'var(--green)')+'">Owed: '+fmtAmt(t[0],owed)+'</span></div>'+rwLine(t[0],w,m)+'</div>';
+    });
+    var ticks=(DATA.rewardLog||[]).filter(function(e){return e.pid===p.id&&e.type==="tick"&&!e.given;});
+    if(ticks.length){any=true;
+      h+='<div style="padding:.35rem 0;border-top:1px solid var(--border);font-size:12px"><div style="font-weight:600;margin-bottom:3px">🎟 Treats to give</div>';
+      ticks.forEach(function(e){h+='<div style="display:flex;align-items:center;gap:8px;padding:2px 0"><span style="flex:1">'+esc(e.tickName||"Treat")+' <span style="color:var(--muted)">('+esc(e.label)+')</span></span>'+(par?'<button onclick="rwGiven(\''+e.id+'\')" style="padding:3px 9px;border-radius:var(--radius);border:none;background:var(--green);color:#fff;font-size:11px;font-weight:600;cursor:pointer">✓ Given</button>':'<span style="color:var(--muted)">⏳</span>')+'</div>';});
+      h+='</div>';
+    }
+    if(!any)h+='<div class="empty">Nothing earned yet.</div>';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:.4rem">';
+    if(par){
+      h+='<button class="mini-btn" style="color:var(--green);border-color:var(--green)" onclick="openRw(\''+p.id+'\',\'paid\')">Pay out</button>';
+      h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openRw(\''+p.id+'\',\'bonus\')">+ Bonus</button>';
+      h+='<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openRw(\''+p.id+'\',\'deduct\')">− Deduct</button>';
+    }
+    h+='<button class="mini-btn" onclick="openRwHist(\''+p.id+'\')">History</button></div></div>';
+  });
+  return h;
+}
+function rwGiven(id){var e=(DATA.rewardLog||[]).find(function(x){return x.id===id;});if(!e)return;e.given=true;e.givenOn=tk();save();renderAll();}
+var rwPid=null,rwMode="paid",rwHPid=null,rwHMonth=null;
+function openRw(pid,mode){
+  rwPid=pid;rwMode=mode;
+  var p=(DATA.profiles||[]).find(function(x){return x.id===pid;});
+  ge("rw-title").textContent=(mode==="paid"?"Pay out to ":mode==="bonus"?"Bonus for ":"Deduct from ")+(p?p.name:"");
+  ge("rw-type").value="money";ge("rw-amt").value="";ge("rw-note").value="";ge("rw-err").style.display="none";
+  ge("rw-note-l").textContent=mode==="deduct"?"Reason (e.g. lost it, broke something)":"Note (optional)";
+  rwTypeChg();openModal("m-rw");
+}
+function rwTypeChg(){
+  var k=ge("rw-type").value;
+  ge("rw-amt-l").textContent=k==="money"?"Amount (R)":"Minutes";
+  var bal=rwBal(rwPid,k);
+  if(rwMode==="paid"){ge("rw-amt").value=bal>0?bal:"";ge("rw-hint").textContent="Currently owed: "+fmtAmt(k,bal);}
+  else if(rwMode==="deduct")ge("rw-hint").textContent="Takes it off what is owed ("+fmtAmt(k,bal)+" now). If it goes below zero it is carried against future earnings.";
+  else ge("rw-hint").textContent="";
+}
+function saveRw(){
+  var k=ge("rw-type").value,amt=parseFloat(ge("rw-amt").value);
+  if(!(amt>0)){ge("rw-err").textContent="Please enter an amount.";ge("rw-err").style.display="block";return;}
+  var note=ge("rw-note").value.trim();
+  if(rwMode==="paid")rwLog(rwPid,"paid",k,amt,note||"Paid out");
+  else if(rwMode==="bonus")rwLog(rwPid,"earn",k,amt,note||"Bonus");
+  else rwLog(rwPid,"deduct",k,amt,note||"Deduction");
+  save();closeModal("m-rw");renderAll();
+  if(ge("m-rwh").classList.contains("open"))renderRwHist();
+}
+function openRwHist(pid){rwHPid=pid;rwHMonth=tk().slice(0,7);renderRwHist();openModal("m-rwh");}
+function rwHMove(d){var y=+rwHMonth.slice(0,4),m=+rwHMonth.slice(5,7)-1+d;var dt=new Date(y,m,1);rwHMonth=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0");renderRwHist();}
+function renderRwHist(){
+  var p=(DATA.profiles||[]).find(function(x){return x.id===rwHPid;});
+  ge("rwh-title").textContent=(p?p.name+"'s ":"")+"rewards";
+  var y=+rwHMonth.slice(0,4),mn=+rwHMonth.slice(5,7)-1;
+  ge("rwh-month").textContent=new Date(y,mn,1).toLocaleDateString([],{month:"long",year:"numeric"});
+  var par=!activeP||activeP.role==="parent"||isFamilyProfile();
+  var list=(DATA.rewardLog||[]).filter(function(e){return e.pid===rwHPid&&e.date.slice(0,7)===rwHMonth;}).sort(function(a,b){return b.ts-a.ts;});
+  var h="";
+  [["money","💵 Money"],["screen","📱 Screen time"]].forEach(function(t){
+    var s=rwSum(rwHPid,t[0],function(e){return e.date.slice(0,7)===rwHMonth;});
+    if(!s.earn&&!s.lost&&!s.paid)return;
+    h+='<div style="font-size:12px;padding:.35rem 0;border-bottom:1px solid var(--border)"><b>'+t[1]+'</b>: earned '+fmtAmt(t[0],s.earn)+(s.lost?', lost <span style="color:var(--red)">'+fmtAmt(t[0],s.lost)+'</span>':'')+', paid out '+fmtAmt(t[0],s.paid)+'</div>';
+  });
+  if(!list.length)h+='<div class="empty">Nothing recorded this month.</div>';
+  list.forEach(function(e){
+    var d=new Date(e.date+"T00:00:00").toLocaleDateString([],{day:"numeric",month:"short"});
+    var txt;
+    if(e.type==="tick")txt='🎟 '+esc(e.tickName||"Treat")+' - '+esc(e.label)+(e.given?' ✅':' ⏳');
+    else if(e.kind==="earn")txt='<span style="color:var(--green)">+'+fmtAmt(e.type,e.amt)+'</span> '+esc(e.label);
+    else if(e.kind==="deduct")txt='<span style="color:var(--red)">-'+fmtAmt(e.type,e.amt)+'</span> '+esc(e.label);
+    else txt='💸 Paid out '+fmtAmt(e.type,e.amt)+(e.label&&e.label!=="Paid out"?' - '+esc(e.label):'');
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--muted);width:44px">'+d+'</span><span style="flex:1">'+txt+'</span>'+(par?'<button class="del-btn" onclick="rwDel(\''+e.id+'\')">x</button>':'')+'</div>';
+  });
+  ge("rwh-body").innerHTML=h;
+}
+function rwDel(id){if(!confirm("Remove this entry?"))return;DATA.rewardLog=(DATA.rewardLog||[]).filter(function(x){return x.id!==id;});save();renderAll();renderRwHist();}
+function ecTypeChg(){
+  var k=rwKind(ge("ec-reward-type").value);
+  ge("ec-amt-wrap").style.display=k==="tick"?"none":"block";
+  ge("ec-amt-l").textContent=k==="money"?"Amount (R)":"Minutes of screen time";
+}
 
 // ── CALENDAR EVENT CATEGORY TAGGING ──
 function setEvCat(eventId,catId){
@@ -1733,7 +1896,7 @@ function renderKidCalendar(){
   var today=new Date();today.setHours(0,0,0,0);var any=false;
   for(var i=0;i<7;i++){
     var d=new Date(today);d.setDate(d.getDate()+i);
-    var devts=evOn(d).filter(function(e){return e.isApp;}).concat(famEvOn(d).filter(function(e){return evHasPerson(e,activeP.name);}));
+    var devts=evOn(d).filter(function(e){return e.isApp||e.isBday;}).concat(famEvOn(d).filter(function(e){return !e.isBday&&evHasPerson(e,activeP.name);}));
     if(!devts.length)continue;
     any=true;
     h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
@@ -1907,7 +2070,7 @@ function renderSettings(){
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 12 Oct 2026 - build 14</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 12 Oct 2026 - build 16</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
@@ -2025,6 +2188,36 @@ ge("auth-screen").className="screen active";
 
 // Family views never use personal categories: events keep each person's profile colour
 (function(){["renderFamily","renderFamCalMonth"].forEach(function(n){var f=window[n];if(typeof f!=="function")return;window[n]=function(){CAT_OFF=true;try{return f.apply(this,arguments);}finally{CAT_OFF=false;}};});})();
+
+// ── BIRTHDAYS: every profile with a birthday gets an all-day event on the calendars, and a banner on their own day ──
+function bdayEvents(dt){
+  var out=[],m=dt.getMonth()+1,da=dt.getDate(),y=dt.getFullYear();
+  var leap=(y%4===0&&y%100!==0)||y%400===0;
+  (DATA.profiles||[]).forEach(function(p){
+    if(!p.bday)return;
+    var bm=+p.bday.slice(5,7),bd=+p.bday.slice(8,10),by=+p.bday.slice(0,4);
+    var hit=(bm===m&&bd===da)||(bm===2&&bd===29&&!leap&&m===2&&da===28);
+    if(!hit)return;
+    var own=activeP&&activeP.id===p.id;
+    var age=by?(y-by):0;
+    var d0=new Date(y,m-1,da),d1=new Date(y,m-1,da+1);
+    out.push({id:"bd_"+p.id+"_"+y,start:d0,end:d1,allDay:true,person:p.name,people:[p.name],name:own?"🎂 Happy Birthday, "+p.name+"!":"🎂 "+p.name+"'s birthday"+(age>0&&age<120?" ("+age+")":""),isBday:true});
+  });
+  return out;
+}
+function bdayBanner(){
+  if(!activeP||isFamilyProfile())return"";
+  var b=bdayEvents(new Date()).filter(function(e){return e.id.indexOf("bd_"+activeP.id+"_")===0;});
+  var h="";
+  if(b.length){
+    var p=activeP,age=p.bday?(new Date().getFullYear()-(+p.bday.slice(0,4))):0;
+    h+='<div style="background:linear-gradient(135deg,#FCE7F3,#FEF3C7);border:2px solid #EC4899;border-radius:var(--radius-lg);padding:1rem;text-align:center;margin-bottom:.75rem"><div style="font-size:30px">🎉🎂🎈</div><div style="font-family:\'Lora\',serif;font-size:19px;font-weight:600;color:#BE185D;margin-top:.2rem">Happy Birthday, '+esc(p.name)+'!</div>'+(age>0&&age<120?'<div style="font-size:12px;color:var(--muted);margin-top:.2rem">Wishing you a wonderful day as you turn '+age+'!</div>':'')+'</div>';
+  }
+  var others=(DATA.profiles||[]).filter(function(p){return p.id!==activeP.id&&bdayEvents(new Date()).some(function(e){return e.id.indexOf("bd_"+p.id+"_")===0;});});
+  others.forEach(function(p){h+='<div style="background:#FCE7F3;border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:.5rem;font-size:13px;color:#BE185D;font-weight:600">🎂 It is '+esc(p.name)+'\'s birthday today!</div>';});
+  return h;
+}
+(function(){["evOn","famEvOn","myTodayEvents"].forEach(function(n){var f=window[n];if(typeof f!=="function")return;window[n]=function(dt){var r=f.apply(this,arguments);var b=bdayEvents(dt);return b.length?b.concat(r):r;};});})();
 </script>
 
 <div id="reward-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;padding:2rem">
