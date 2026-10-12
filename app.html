@@ -379,6 +379,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
   <div class="mf"><label class="ml">Title</label><input class="mi" id="gc-title" type="text" placeholder="e.g. Dentist appointment"></div>
   <div class="m2"><div class="mf"><label class="ml">Date</label><input class="mi" id="gc-date" type="date"></div><div class="mf"><label class="ml">Time (optional)</label><input class="mi" id="gc-time" type="time"></div></div>
   <div class="mf" id="gc-calsel-wrap" style="display:none"><label class="ml">Save to calendar</label><select class="msel" id="gc-calsel"></select></div>
+  <div class="mf" id="gc-rep-wrap"><label class="ml">Repeat</label><select class="msel" id="gc-rep"><option value="">Does not repeat</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="yearly">Every year</option></select></div>
   <div class="mf" id="gc-who-wrap"><label class="ml">Who is this for? (tap one or more)</label><div class="achips" id="gc-who"></div></div>
   <div class="mf" id="gc-cat-wrap" style="display:none"><label class="ml">Category</label><select class="msel" id="gc-cat"></select></div>
   <div id="gc-err" style="color:var(--red);font-size:12px;margin-bottom:.5rem;display:none"></div>
@@ -803,15 +804,42 @@ document.querySelectorAll(".pin-key").forEach(function(b){
 });
 ge("pin-back").addEventListener("click",function(){ge("pin-screen").style.display="none";});
 
+// ── STAY CONNECTED: Google tokens last ~1h, so refresh them silently instead of dropping the connection ──
+var gBusy={};
+function gKeyFor(kind){if(!user)return null;if(kind==="family")return"fct_"+user.uid;return activeP?"ct_"+user.uid+"_"+activeP.id:null;}
+function gStore(k,tok){try{localStorage.setItem(k,tok);localStorage.setItem("tt_"+k,String(Date.now()));localStorage.setItem("cc_"+k,"1");}catch(e){}
+  fetch("https://www.googleapis.com/calendar/v3/calendars/primary",{headers:{Authorization:"Bearer "+tok}}).then(function(r){return r.ok?r.json():null;}).then(function(d){if(d&&d.id){try{localStorage.setItem("gh_"+k,d.id);}catch(e){}}}).catch(function(){});}
+function gWanted(k){try{return !!k&&!!localStorage.getItem("cc_"+k);}catch(e){return false;}}
+function gAge(k){try{return Date.now()-(+localStorage.getItem("tt_"+k)||0);}catch(e){return 1e12;}}
+function gForget(k){["","tt_","cc_","gh_"].forEach(function(p){try{localStorage.removeItem(p+k);}catch(e){}});}
+function gSilent(kind){
+  var k=gKeyFor(kind);if(!gWanted(k)||gBusy[kind])return;
+  var tc=kind==="family"?famTokenClient:tokenClient;if(!tc)return;
+  gBusy[kind]=1;setTimeout(function(){gBusy[kind]=0;},8000);
+  var h=null;try{h=localStorage.getItem("gh_"+k);}catch(e){}
+  try{tc.requestAccessToken(h?{prompt:"",hint:h}:{prompt:""});}catch(e){}
+}
+function gCheck(){
+  ["personal","family"].forEach(function(kind){
+    var k=gKeyFor(kind);if(!gWanted(k))return;
+    var tok=kind==="family"?famCalToken:calToken;
+    if(!tok||gAge(k)>45*60*1000)gSilent(kind);
+  });
+}
+setInterval(gCheck,5*60*1000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)gCheck();});
+["click","touchend","keydown"].forEach(function(ev){document.addEventListener(ev,function(){if(user)gCheck();},true);});
 function tryCal(){
   if(!user||!activeP)return;
-  var st=localStorage.getItem("ct_"+user.uid+"_"+activeP.id);
-  if(st){calToken=st;fetchCal();}else{calToken=null;calEvts=[];tryOutlookCal();}
-  var t=function(){if(typeof google!=="undefined"&&google.accounts)initTC();else setTimeout(t,500);};t();
+  var k0="ct_"+user.uid+"_"+activeP.id;
+  var st=localStorage.getItem(k0);
+  if(st&&!localStorage.getItem("tt_"+k0)){try{localStorage.setItem("cc_"+k0,"1");localStorage.setItem("tt_"+k0,String(Date.now()));}catch(e){}}
+  if(st&&gAge(k0)<50*60*1000){calToken=st;fetchCal();}else{calToken=null;calEvts=[];tryOutlookCal();}
+  var t=function(){if(typeof google!=="undefined"&&google.accounts){initTC();if(!calToken)gSilent("personal");}else setTimeout(t,500);};t();
 }
 function initTC(){
   if(tokenClient)return;
-  tokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user&&activeP){calToken=r.access_token;localStorage.setItem("ct_"+user.uid+"_"+activeP.id,calToken);fetchCal();if(aPage==="settings")renderSettings();}}});
+  tokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user&&activeP){calToken=r.access_token;gStore("ct_"+user.uid+"_"+activeP.id,calToken);fetchCal();if(aPage==="settings")renderSettings();}}});
 }
 
 // ── MULTI-CALENDAR (Google): several calendars from one connected account ──
@@ -889,7 +917,7 @@ function hydrateFamCache(){
 function fetchCal(){
   if(!calToken)return;
   fetchGoogleEvents(calToken,"personal").then(function(list){calEvts=list;if(activeP)renderAll();})
-  .catch(function(e){if(String(e&&e.message)==="401"){calToken=null;if(user&&activeP)localStorage.removeItem("ct_"+user.uid+"_"+activeP.id);}});
+  .catch(function(e){if(String(e&&e.message)==="401"){calToken=null;if(user&&activeP)localStorage.removeItem("ct_"+user.uid+"_"+activeP.id);gSilent("personal");}});
 }
 
 // ── MICROSOFT/OUTLOOK CALENDAR (alternative to Google - see MS_CLIENT_ID above) ──
@@ -962,20 +990,22 @@ function fetchOutlookCal(){
 // ── FAMILY CALENDAR (single shared calendar, any parent can connect/change) ──
 function tryFamCal(){
   if(!user)return;
-  var st=localStorage.getItem("fct_"+user.uid);
-  if(st){famCalToken=st;fetchFamCal();}else{tryFamOutlookCal();}
-  var t=function(){if(typeof google!=="undefined"&&google.accounts)initFamTC();else setTimeout(t,500);};t();
+  var kf="fct_"+user.uid;
+  var st=localStorage.getItem(kf);
+  if(st&&!localStorage.getItem("tt_"+kf)){try{localStorage.setItem("cc_"+kf,"1");localStorage.setItem("tt_"+kf,String(Date.now()));}catch(e){}}
+  if(st&&gAge(kf)<50*60*1000){famCalToken=st;fetchFamCal();}else{tryFamOutlookCal();}
+  var t=function(){if(typeof google!=="undefined"&&google.accounts){initFamTC();if(!famCalToken)gSilent("family");}else setTimeout(t,500);};t();
 }
 function initFamTC(){
   if(famTokenClient)return;
-  famTokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user){famCalToken=r.access_token;localStorage.setItem("fct_"+user.uid,famCalToken);fetchFamCal();if(aPage==="settings")renderSettings();}}});
+  famTokenClient=google.accounts.oauth2.initTokenClient({client_id:OAUTH_ID,scope:"https://www.googleapis.com/auth/calendar",callback:function(r){if(!r.error&&user){famCalToken=r.access_token;gStore("fct_"+user.uid,famCalToken);fetchFamCal();if(aPage==="settings")renderSettings();}}});
 }
 function conFamCal(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:"select_account"});else{initFamTC();setTimeout(function(){if(famTokenClient)famTokenClient.requestAccessToken({prompt:"select_account"});},500);}}
-function disFamCal(){famCalToken=null;famCalEvts=[];DATA.famCal=null;save();if(user)localStorage.removeItem("fct_"+user.uid);renderSettings();renderAll();}
+function disFamCal(){famCalToken=null;famCalEvts=[];DATA.famCal=null;save();if(user)gForget("fct_"+user.uid);renderSettings();renderAll();}
 function fetchFamCal(){
   if(!famCalToken)return;
   fetchGoogleEvents(famCalToken,"family").then(function(list){famCalEvts=list;renderAll();cacheFamEvents();})
-  .catch(function(e){if(String(e&&e.message)==="401"){famCalToken=null;if(user)localStorage.removeItem("fct_"+user.uid);}});
+  .catch(function(e){if(String(e&&e.message)==="401"){famCalToken=null;if(user)localStorage.removeItem("fct_"+user.uid);gSilent("family");}});
 }
 function tryFamOutlookCal(){
   if(!user)return;
@@ -1021,7 +1051,14 @@ function famEvOn(dt){
 }
 
 // ── GOOGLE CALENDAR WRITE (create/edit/delete on the real connected calendars) ──
-function gcalEventBody(title,dateStr,timeStr){
+function recRule(rec){return rec==="weekly"?"RRULE:FREQ=WEEKLY":rec==="monthly"?"RRULE:FREQ=MONTHLY":rec==="yearly"?"RRULE:FREQ=YEARLY":null;}
+function gcalEventBody(title,dateStr,timeStr,rec){
+  var b=gcalEventBody0(title,dateStr,timeStr);
+  var rr=recRule(rec);
+  if(rr){b.recurrence=[rr];if(b.start.dateTime){var tz="Africa/Johannesburg";try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone||tz;}catch(e){}b.start.timeZone=tz;b.end.timeZone=tz;}}
+  return b;
+}
+function gcalEventBody0(title,dateStr,timeStr){
   if(timeStr){
     var end=new Date(dateStr+"T"+timeStr+":00");end.setHours(end.getHours()+1);
     var pad=function(n){return String(n).padStart(2,"0");};
@@ -1031,11 +1068,11 @@ function gcalEventBody(title,dateStr,timeStr){
   var endD=new Date(dateStr+"T00:00:00");endD.setDate(endD.getDate()+1);
   return{summary:title,start:{date:dateStr},end:{date:dkey(endD)}};
 }
-function saveGcalEvent(source,eventId,title,dateStr,timeStr){
+function saveGcalEvent(source,eventId,title,dateStr,timeStr,rec){
   var token=source==="family"?famCalToken:calToken;
   if(!token)return Promise.reject(new Error("Not connected"));
   var url="https://www.googleapis.com/calendar/v3/calendars/"+encodeURIComponent(gcalCalId||"primary")+"/events"+(eventId?"/"+eventId:"");
-  return fetch(url,{method:eventId?"PATCH":"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(gcalEventBody(title,dateStr,timeStr))}).then(function(r){if(!r.ok)throw new Error("save failed");return r.json();});
+  return fetch(url,{method:eventId?"PATCH":"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(gcalEventBody(title,dateStr,timeStr,eventId?null:rec))}).then(function(r){if(!r.ok)throw new Error("save failed");return r.json();});
 }
 function deleteGcalEvent(source,eventId){
   var token=source==="family"?famCalToken:calToken;
@@ -1052,11 +1089,20 @@ function outlookEventBody(title,dateStr,timeStr){
   var endD=new Date(dateStr+"T00:00:00Z");endD.setDate(endD.getDate()+1);
   return{subject:title,isAllDay:true,start:{dateTime:dateStr+"T00:00:00",timeZone:"UTC"},end:{dateTime:dkey(endD)+"T00:00:00",timeZone:"UTC"}};
 }
-function saveOutlookEvent(source,eventId,title,dateStr,timeStr){
+function outlookRec(b,rec,dateStr){
+  if(!rec)return b;
+  var d=new Date(dateStr+"T00:00:00"),pat;
+  if(rec==="weekly")pat={type:"weekly",interval:1,daysOfWeek:[["sunday","monday","tuesday","wednesday","thursday","friday","saturday"][d.getDay()]],firstDayOfWeek:"monday"};
+  else if(rec==="monthly")pat={type:"absoluteMonthly",interval:1,dayOfMonth:d.getDate()};
+  else pat={type:"absoluteYearly",interval:1,dayOfMonth:d.getDate(),month:d.getMonth()+1};
+  b.recurrence={pattern:pat,range:{type:"noEnd",startDate:dateStr}};
+  return b;
+}
+function saveOutlookEvent(source,eventId,title,dateStr,timeStr,rec){
   var token=source==="family"?famMsToken:msToken;
   if(!token)return Promise.reject(new Error("Not connected"));
   var url="https://graph.microsoft.com/v1.0/me/events"+(eventId?"/"+eventId:"");
-  return fetch(url,{method:eventId?"PATCH":"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(outlookEventBody(title,dateStr,timeStr))}).then(function(r){if(!r.ok)throw new Error("save failed");return r.json();});
+  return fetch(url,{method:eventId?"PATCH":"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(outlookRec(outlookEventBody(title,dateStr,timeStr),eventId?null:rec,dateStr))}).then(function(r){if(!r.ok)throw new Error("save failed");return r.json();});
 }
 function deleteOutlookEvent(source,eventId){
   var token=source==="family"?famMsToken:msToken;
@@ -1067,8 +1113,8 @@ function calProviderFor(source){
   if(source==="family")return famCalToken?"google":(famMsToken?"outlook":null);
   return calToken?"google":(msToken?"outlook":null);
 }
-function saveCalEventAny(source,eventId,title,dateStr,timeStr){
-  return calProviderFor(source)==="outlook"?saveOutlookEvent(source,eventId,title,dateStr,timeStr):saveGcalEvent(source,eventId,title,dateStr,timeStr);
+function saveCalEventAny(source,eventId,title,dateStr,timeStr,rec){
+  return calProviderFor(source)==="outlook"?saveOutlookEvent(source,eventId,title,dateStr,timeStr,rec):saveGcalEvent(source,eventId,title,dateStr,timeStr,rec);
 }
 function deleteCalEventAny(source,eventId){
   return calProviderFor(source)==="outlook"?deleteOutlookEvent(source,eventId):deleteGcalEvent(source,eventId);
@@ -1085,7 +1131,7 @@ ge("gc-save").addEventListener("click",function(){
   if(!gcalEid&&ge("gc-calsel-wrap").style.display!=="none")gcalCalId=ge("gc-calsel").value;
   var whoN=[].map.call(ge("gc-who").querySelectorAll(".achip.sel[data-name]"),function(c){return c.dataset.name;});
   var fullTitle=whoN.length?"["+whoN.join(", ")+"] "+t:t;
-  saveCalEventAny(gcalSource,gcalEid,fullTitle,d,tm).then(function(resp){
+  saveCalEventAny(gcalSource,gcalEid,fullTitle,d,tm,gcalEid?null:ge("gc-rep").value).then(function(resp){
     var newId=gcalEid||(resp&&resp.id);
     if(newId&&catWrap.style.display!=="none")setEvCat(newId,ge("gc-cat").value);
     closeModal("m-gcal");refreshCalSource(gcalSource);
@@ -1111,7 +1157,7 @@ function whoAll(){var cs=ge("gc-who").querySelectorAll(".achip[data-name]");var 
 function openAddCalEvent(source,dk){
   gcalEid=null;gcalSource=source;
   ge("gc-title-h").textContent=source==="family"?"Add Family Calendar Event":"Add Calendar Event";
-  ge("gc-title").value="";ge("gc-date").value=dk||tk();ge("gc-time").value="";
+  ge("gc-title").value="";ge("gc-date").value=dk||tk();ge("gc-time").value="";ge("gc-rep").value="";ge("gc-rep-wrap").style.display="block";
   ge("gc-delete").style.display="none";ge("gc-err").style.display="none";
   fillWho([],source);fillCalSel(source);
   var catWrap=ge("gc-cat-wrap");
@@ -1124,7 +1170,7 @@ function openEditCalEvent(id,source){
   var ev=(arr||[]).find(function(x){return x.id===id;});if(!ev)return;
   gcalEid=id;gcalSource=source;
   ge("gc-title-h").textContent="Edit Calendar Event";
-  ge("gc-title").value=ev.name||"";
+  ge("gc-title").value=ev.name||"";ge("gc-rep-wrap").style.display="none";
   ge("gc-date").value=dkey(ev.start);
   ge("gc-time").value=ev.allDay?"":(String(ev.start.getHours()).padStart(2,"0")+":"+String(ev.start.getMinutes()).padStart(2,"0"));
   ge("gc-delete").style.display="block";ge("gc-err").style.display="none";
@@ -1226,7 +1272,7 @@ function myTodayEvents(dt){
     var ee=new Date(ev.end.getFullYear(),ev.end.getMonth(),ev.end.getDate());
     return ev.allDay?(d>=s&&d<ee):d.getTime()===s.getTime();
   });
-  if(activeP&&activeP.role==="parent"&&!isFamilyProfile()){
+  if(activeP&&!isFamilyProfile()){
     var have={};gc.forEach(function(x){have[x.id]=1;});
     (famCalEvts||[]).forEach(function(ev){
       if(have[ev.id]||!evHasPerson(ev,activeP.name))return;
@@ -1384,7 +1430,7 @@ function renderToday(){
     h+='</div>';
   }
   h+=renderTodoSection(activeP.id,activeP.color);
-  var evts=isK?myTodayEvents(dt).filter(function(e){return e.isApp;}):myTodayEvents(dt);
+  var evts=myTodayEvents(dt);
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue);cursor:pointer" onclick="goPage(\'calendar\')" title="View monthly calendar">📅 Events today ›</span>';
   if(!isK){
     h+='<div style="display:flex;gap:5px">';
@@ -1861,12 +1907,12 @@ function renderSettings(){
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 10 Oct 2026 - build 11</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 12 Oct 2026 - build 14</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
 function conCal(){if(tokenClient)tokenClient.requestAccessToken({prompt:"select_account"});else{initTC();setTimeout(function(){if(tokenClient)tokenClient.requestAccessToken({prompt:"select_account"});},500);}}
-function disCal(){var k=user&&activeP?"ct_"+user.uid+"_"+activeP.id:null;calToken=null;calEvts=[];if(k)localStorage.removeItem(k);renderSettings();renderAll();}
+function disCal(){var k=user&&activeP?"ct_"+user.uid+"_"+activeP.id:null;calToken=null;calEvts=[];if(k)gForget(k);renderSettings();renderAll();}
 
 function openModal(id){ge(id).classList.add("open");}
 function closeModal(id){ge(id).classList.remove("open");}
@@ -1967,9 +2013,9 @@ function signOutAll(){
   window.__manualSignOut=true;try{localStorage.removeItem("sp_signed_in");}catch(e){}
   if(user){
     localStorage.removeItem("sp_pid_"+user.uid);
-    localStorage.removeItem("fct_"+user.uid);
+    gForget("fct_"+user.uid);
     localStorage.removeItem("fmso_"+user.uid);
-    (DATA.profiles||[]).forEach(function(p){localStorage.removeItem("ct_"+user.uid+"_"+p.id);localStorage.removeItem("mso_"+user.uid+"_"+p.id);});
+    (DATA.profiles||[]).forEach(function(p){gForget("ct_"+user.uid+"_"+p.id);localStorage.removeItem("mso_"+user.uid+"_"+p.id);});
   }
   calToken=null;calEvts=[];famCalToken=null;famCalEvts=[];msToken=null;msAccount=null;famMsToken=null;famMsAccount=null;dataOwnerUid=null;
   if(fbReady)auth.signOut();
