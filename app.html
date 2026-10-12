@@ -1808,9 +1808,9 @@ function addSI(){var i=ge("shopinp");if(!i)return;var v=i.value.trim();if(!v)ret
 function renderSettings(){
   var h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">Settings</h2>';
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Subscription</span></div><div class="crow">';
-  if(isWL())h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--green)">Free access (tester)</div></div>';
+  if(isWL())h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--green)">Tester access</div></div>';
   else if(isPd()){var cn=BILLING.status==="cancelled";h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:'+(cn?'var(--mustard-text)':'var(--green)')+'">'+(cn?'Cancelled - access until ':'Active subscription - renews ')+new Date(BILLING.expiresAt).toLocaleDateString()+'</div><div style="font-size:11px;color:var(--muted)">'+(BILLING.plan==="annual"?"Annual plan":"Monthly plan")+'</div></div>'+(!cn&&canEdit()?'<button onclick="cancelSub()" style="padding:6px 13px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;color:var(--charcoal);font-size:12px;font-weight:600;cursor:pointer">Cancel</button>':'');}
-  else h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--mustard-text)">Free trial - '+tdl()+' days left</div></div><button onclick="showPW()" style="padding:6px 13px;border-radius:var(--radius);border:none;background:var(--red);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Subscribe</button>';
+  else h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--mustard-text)">7-day trial - '+tdl()+' days left</div></div><button onclick="showPW()" style="padding:6px 13px;border-radius:var(--radius);border:none;background:var(--red);color:#fff;font-size:12px;font-weight:600;cursor:pointer">Subscribe</button>';
   h+='</div></div>';
   var isParSet=canEdit();
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Family</span></div><div class="crow">';
