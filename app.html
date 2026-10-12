@@ -407,7 +407,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 </div></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.7.1/lib/msal-browser.min.js" defer></script>
 <script>
 var FB_CFG={apiKey:"AIzaSyAfo1GRLp5keYakJlE9EsC5s4CvkiClTcw",authDomain:"sticky-planner.firebaseapp.com",projectId:"sticky-planner",storageBucket:"sticky-planner.firebasestorage.app",messagingSenderId:"1036703981049",appId:"1:1036703981049:web:09e93dcfa2804f717bb128"};
 var OAUTH_ID="1036703981049-et7d7ubvo6s5bkndnccded0l4pbgqdag.apps.googleusercontent.com";
@@ -2070,7 +2070,7 @@ function renderSettings(){
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Install App on Your Phone</span></div><div style="padding:.875rem 1rem;font-size:13px;color:var(--muted);line-height:1.8"><b>iPhone (Safari):</b> tap Share icon → Add to Home Screen<br><b>Android (Chrome):</b> tap menu → Add to Home Screen<br><br>Once installed, you stay signed in automatically.</div></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 12 Oct 2026 - build 17</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 12 Oct 2026 - build 18</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
