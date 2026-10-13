@@ -38,10 +38,10 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 .pin-dot{width:13px;height:13px;border-radius:50%;border:2px solid var(--border);}
 .pin-dot.on{background:var(--red);border-color:var(--red);}
 #app{display:none;flex-direction:column;max-width:800px;margin:0 auto;min-height:100vh;}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:3px solid var(--mustard);background:#fff;position:sticky;top:0;z-index:50;}
-.tb-brand{display:flex;align-items:center;gap:8px;}
-.tb-logo{width:28px;height:28px;object-fit:contain;}
-.tb-title{font-family:'Lora',serif;font-size:16px;color:var(--red);}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:.5rem 1.25rem;border-bottom:3px solid var(--mustard);background:#fff;position:sticky;top:0;z-index:50;}
+.tb-brand{display:flex;align-items:center;gap:10px;}
+.tb-logo{width:54px;height:54px;object-fit:contain;}
+.tb-title{font-family:'Lora',serif;font-size:19px;color:var(--red);}
 .profile-pill{display:flex;align-items:center;gap:5px;background:var(--red-bg);border:1.5px solid var(--red);border-radius:20px;padding:3px 9px 3px 4px;cursor:pointer;}
 .pill-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;}
 .pill-name{font-size:11px;font-weight:600;color:var(--red-text);}
@@ -258,7 +258,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 <div id="app">
   <div class="topbar">
     <div class="tb-brand">
-      <img src="logo-sm.png" alt="SP" class="tb-logo">
+      <img src="logo.png" alt="SP" class="tb-logo">
       <span class="tb-title">StickyPaper</span>
     </div>
     <div style="display:flex;align-items:center;gap:6px">
@@ -327,6 +327,8 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 
 <div class="modal" id="m-meal"><div class="mbox">
   <div class="mhandle"></div><div class="mtitle" id="mm-title">Plan Dinner</div>
+  <div class="mf"><label class="ml">Day</label><input class="mi" id="mm-date" type="date"></div>
+  <div class="mf" id="mm-rec-wrap" style="display:none"><label class="ml">Pick a saved recipe</label><select class="msel" id="mm-rec" onchange="mmPickRec()"></select></div>
   <div class="mf" id="mm-b-wrap" style="display:none"><label class="ml">Breakfast</label><input class="mi" id="mm-b" type="text" placeholder="e.g. Oats and fruit"></div>
   <div class="mf" id="mm-l-wrap" style="display:none"><label class="ml">Lunch</label><input class="mi" id="mm-l" type="text" placeholder="e.g. Chicken wraps"></div>
   <div class="mf"><label class="ml" id="mm-d-l">What are you making?</label>
@@ -338,6 +340,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 
 <div class="modal" id="m-recipe"><div class="mbox">
   <div class="mhandle"></div><div class="mtitle" id="rm-title">Add Recipe</div>
+  <div class="mf" id="rm-imp-wrap"><label class="ml">Import from a link</label><div style="display:flex;gap:6px"><input class="mi" id="rm-url" type="url" placeholder="Paste a recipe link, then tap Import" style="flex:1"><button id="rm-imp" onclick="importRecipeUrl()" style="padding:0 14px;border-radius:var(--radius);border:none;background:var(--blue);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Import</button></div><div id="rm-imp-msg" style="font-size:12px;color:var(--muted);margin-top:4px"></div></div>
   <div class="mf"><label class="ml">Recipe name</label><input class="mi" id="rm-name" type="text" placeholder="e.g. Spaghetti Bolognaise"></div>
   <div class="mf"><label class="ml">Ingredients (one per line)</label><textarea class="mi" id="rm-ingredients" rows="6" placeholder="500g mince&#10;1 onion&#10;2 tins tomatoes" style="resize:vertical;line-height:1.6"></textarea></div>
   <div class="mf"><label class="ml">Method (one step per line)</label><textarea class="mi" id="rm-method" rows="6" placeholder="1. Brown the mince&#10;2. Add onion and cook until soft&#10;3. Stir in tomatoes and simmer" style="resize:vertical;line-height:1.6"></textarea></div>
@@ -1589,23 +1592,6 @@ function renderFamily(){
     else h+='<div style="display:flex;align-items:center;gap:8px;background:var(--charcoal-bg);border-radius:var(--radius);padding:.6rem .9rem;margin-bottom:1rem"><span style="font-size:12px;color:var(--muted);flex:1">🔒 Viewing only</span><button onclick="unlockFamilyEdit()" style="padding:5px 11px;border-radius:var(--radius);border:none;background:var(--red);color:#fff;font-size:11px;font-weight:600;cursor:pointer">Unlock (Parent PIN)</button></div>';
   }
 
-  var ftodos=DATA.familyTodos||[],ftvis=ftodos.filter(function(t){return !t.done;});
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--red-bg);color:var(--red)">📝 Family To-Do List</span></div><div class="card red">';
-  if(!ftvis.length)h+='<div class="empty">'+(ftodos.length?"All done! 🎉":"No family to-dos yet.")+'</div>';
-  else ftvis.forEach(function(t){h+='<div class="task-row" onclick="'+(isPar?"famTodoTog('"+t.id+"')":"")+'"><div class="tcheck"></div><span class="ttext">'+esc(t.text)+'</span>'+(isPar?'<button class="del-btn" onclick="event.stopPropagation();famTodoDel(\''+t.id+'\')">x</button>':'')+'</div>';});
-  if(isPar)h+='<div class="add-row"><input class="add-inp" id="famtodo-add" placeholder="Add something for the family..." onkeydown="if(event.key===\'Enter\')famTodoAdd()"><button class="add-btn" onclick="famTodoAdd()">Add</button></div>';
-  h+='</div>';
-
-  var flsts=(DATA.lists||[]).filter(function(l){return l.scope==="family";});
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--charcoal-bg);color:var(--charcoal)">🗒 Family Lists</span>'+(isPar?'<button class="mini-btn" style="color:var(--charcoal);border-color:var(--border)" onclick="openNL()">+ New</button>':'')+'</div><div class="card">';
-  if(!flsts.length)h+='<div class="empty">No family lists yet.</div>';
-  else flsts.forEach(function(l){
-    var items=l.items||[],dcx=items.filter(function(it){return ldv(l.id,it.id,dk);}).length;
-    var cnt=l.type==="notes"?(items.length+' item'+(items.length!==1?'s':'')):(dcx+'/'+items.length);
-    h+='<div class="task-row" onclick="openListFromHome(\''+l.id+'\')" style="cursor:pointer"><span style="font-size:16px;margin-right:8px">'+(l.icon||'📋')+'</span><span class="ttext" style="flex:1">'+esc(l.name)+'</span><span style="font-size:11px;color:var(--muted)">'+cnt+'</span></div>';
-  });
-  h+='</div>';
-
   var famEvts=famEvOn(dt);
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">📅 Family Calendar</span><div style="display:flex;gap:5px">';
   if(isPar&&famCalToken)h+='<button class="mini-btn" style="color:var(--blue);border-color:var(--blue)" onclick="openAddCalEvent(\'family\',\''+dk+'\')">+ Add</button>';
@@ -1624,12 +1610,29 @@ function renderFamily(){
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--mustard-bg);color:var(--mustard-text)">🍽 '+(multiM?"Today\'s meals":"Tonight\'s dinner")+'</span>'+(isPar?'<button class="mini-btn" style="color:var(--mustard-text);border-color:var(--mustard)" onclick="openMealM(\''+dk+'\')">Edit</button>':'')+'</div>';
   h+='<div class="card mustard" style="padding:.875rem 1rem">'+(mItems.length?mItems.map(function(x){return '<div style="'+(multiM?'font-size:14px;margin:2px 0':'font-size:15px;font-weight:500')+'">'+(multiM?'<span style="font-size:11px;font-weight:700;color:var(--mustard-text);display:inline-block;min-width:70px">'+x.k+'</span>':'')+esc(x.t)+'</div>';}).join(''):'<span style="font-size:13px;color:var(--muted);font-style:italic">'+(multiM?'No meals planned yet.':'No dinner planned yet.')+'</span>')+'</div>';
 
+  var ftodos=DATA.familyTodos||[],ftvis=ftodos.filter(function(t){return !t.done;});
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--red-bg);color:var(--red)">📝 Family To-Do List</span></div><div class="card red">';
+  if(!ftvis.length)h+='<div class="empty">'+(ftodos.length?"All done! 🎉":"No family to-dos yet.")+'</div>';
+  else ftvis.forEach(function(t){h+='<div class="task-row" onclick="'+(isPar?"famTodoTog('"+t.id+"')":"")+'"><div class="tcheck"></div><span class="ttext">'+esc(t.text)+'</span>'+(isPar?'<button class="del-btn" onclick="event.stopPropagation();famTodoDel(\''+t.id+'\')">x</button>':'')+'</div>';});
+  if(isPar)h+='<div class="add-row"><input class="add-inp" id="famtodo-add" placeholder="Add something for the family..." onkeydown="if(event.key===\'Enter\')famTodoAdd()"><button class="add-btn" onclick="famTodoAdd()">Add</button></div>';
+  h+='</div>';
+
   var ps=(DATA.shoppingList||[]).filter(function(s){return !s.done;});
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--green-bg);color:var(--green)">🛒 Grocery list</span><button class="mini-btn" style="color:var(--green);border-color:var(--green)" onclick="goPage(\'meals\')">View all</button></div><div class="card green">';
   if(!ps.length)h+='<div class="empty" style="padding:.875rem">Grocery list is clear.</div>';
   else ps.slice(0,5).forEach(function(s){var ri=(DATA.shoppingList||[]).findIndex(function(x){return x.id===s.id;});h+='<div class="shop-row"><div class="shop-cb" onclick="togShopT('+ri+')"></div><span class="shop-text">'+esc(s.text)+'</span>'+(isPar?'<button class="del-btn" onclick="delShopT('+ri+')">x</button>':'')+'</div>';});
   if(ps.length>5)h+='<div style="padding:.5rem 1rem;font-size:11px;color:var(--muted)">+'+(ps.length-5)+' more</div>';
   if(isPar)h+='<div class="add-row"><input class="add-inp" id="qshop" placeholder="Add item..."><button class="add-btn" onclick="qAddShop()">Add</button></div>';
+  h+='</div>';
+
+  var flsts=(DATA.lists||[]).filter(function(l){return l.scope==="family";});
+  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--charcoal-bg);color:var(--charcoal)">🗒 Family Lists</span>'+(isPar?'<button class="mini-btn" style="color:var(--charcoal);border-color:var(--border)" onclick="openNL()">+ New</button>':'')+'</div><div class="card">';
+  if(!flsts.length)h+='<div class="empty">No family lists yet.</div>';
+  else flsts.forEach(function(l){
+    var items=l.items||[],dcx=items.filter(function(it){return ldv(l.id,it.id,dk);}).length;
+    var cnt=l.type==="notes"?(items.length+' item'+(items.length!==1?'s':'')):(dcx+'/'+items.length);
+    h+='<div class="task-row" onclick="openListFromHome(\''+l.id+'\')" style="cursor:pointer"><span style="font-size:16px;margin-right:8px">'+(l.icon||'📋')+'</span><span class="ttext" style="flex:1">'+esc(l.name)+'</span><span style="font-size:11px;color:var(--muted)">'+cnt+'</span></div>';
+  });
   h+='</div>';
 
   h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--red-bg);color:var(--red)">🧹 Kids\' Chores</span>'+(isPar?'<button class="mini-btn" style="color:var(--red);border-color:var(--red)" onclick="openTaskM(\''+dk+'\')">+ Add</button>':'')+'</div>';
@@ -1935,8 +1938,8 @@ function renderFamCalMonth(){
       var col=evCol(ev);
       h+='<div class="ev-row"'+evRowClick(ev,"family")+'><div class="ev-dot" style="background:'+col+'"></div><span class="ev-name">'+esc(ev.name)+'</span>'+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+evTags(ev)+evCatSel(ev)+'</div>';
     });
-    if(sev.length&&canEdit())h+='<div style="font-size:10px;color:var(--muted);margin-top:.4rem">Tap an event to edit it, or use the dropdown to give it a category colour.</div>';
     h+='</div>';
+    if(sev.length&&canEdit())h+='<div style="font-size:11px;color:var(--muted);text-align:center;padding:0 .5rem .75rem">Tap an event to edit it.</div>';
   }
   h+=catLegendHtml();ge("page-calendar").innerHTML=h;
 }
@@ -2044,7 +2047,7 @@ function renderMeals(){
   if(ip){var mo2=DATA.mealOpts||{};h+='<div class="card" style="padding:.6rem 1rem;font-size:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><b>Also plan:</b><label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" '+(mo2.b?'checked':'')+' onchange="toggleMealOpt(\'b\',this.checked)"> Breakfast</label><label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" '+(mo2.l?'checked':'')+' onchange="toggleMealOpt(\'l\',this.checked)"> Lunch</label><span style="color:var(--muted)">(dinner is always on)</span></div>';}
   h+='<div class="card mustard"><div class="card-hdr"><span class="card-hdr-title">📖 Recipes ('+recs.length+')</span>'+(ip?'<div style="display:flex;gap:5px"><button onclick="openAR()" style="font-size:11px;padding:4px 10px;border-radius:12px;border:none;background:var(--mustard);color:#2F2F2F;font-weight:600;cursor:pointer">+ Add</button></div>':'')+'</div>';
   if(!recs.length)h+='<div class="empty">No recipes yet.</div>';
-  else recs.forEach(function(r){h+='<div class="crow"><div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(r.title)+'</div><div style="font-size:11px;color:var(--muted)">'+(r.ingredients||[]).length+' ingredients · '+(r.method||[]).length+' steps'+(r.sourceUrl?' · <a href="'+esc(r.sourceUrl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue)">Link ↗</a>':'')+'</div></div>'+(ip?'<button onclick="openER(\''+r.id+'\')" style="padding:5px 10px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:11px;cursor:pointer">Edit</button>':'')+'</div>';});
+  else recs.forEach(function(r){h+='<div class="crow"><div style="flex:1"><div style="font-size:13px;font-weight:600">'+esc(r.title)+'</div><div style="font-size:11px;color:var(--muted)">'+(r.ingredients||[]).length+' ingredients · '+(r.method||[]).length+' steps'+(r.sourceUrl?' · <a href="'+esc(r.sourceUrl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue)">Link ↗</a>':'')+'</div></div>'+(ip?'<button onclick="planRecipe(\''+r.id+'\')" style="padding:5px 10px;border-radius:var(--radius);border:1.5px solid var(--mustard);background:var(--mustard-bg);color:var(--mustard-text);font-size:11px;font-weight:600;cursor:pointer;margin-right:4px">📅 Plan</button><button onclick="openER(\''+r.id+'\')" style="padding:5px 10px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:11px;cursor:pointer">Edit</button>':'')+'</div>';});
   h+='</div>';
   if(wm.length){h+='<div class="card mustard"><div class="card-hdr"><span class="card-hdr-title">This week</span>'+(ip?'<button onclick="genSL()" style="font-size:11px;padding:4px 10px;border-radius:12px;border:none;background:var(--mustard);color:#2F2F2F;font-weight:600;cursor:pointer">Shopping list</button>':'')+'</div>';wm.forEach(function(x){h+='<div class="crow"><span style="min-width:34px;font-size:11px;font-weight:700;color:var(--mustard-text)">'+x.day+'</span><span style="flex:1;font-size:13px">'+esc(x.meal)+'</span>'+(ip?'<button class="del-btn" onclick="clrMeal(\''+x.dk+'\')">x</button>':'')+'</div>';});h+='</div>';}
   h+='<div class="card '+(shop.length?'green':'')+'"><div class="card-hdr"><span class="card-hdr-title">🛒 Shopping List</span>'+(ip?'<button onclick="clrDoneS()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline">Clear done</button>':'')+'</div>';
@@ -2120,7 +2123,7 @@ function renderSettings(){
 if(activeP&&!isFamilyProfile())h+='<div class="card" style="padding:.75rem 1rem;margin-bottom:.75rem"><label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" '+(activeP.water?'checked':'')+' onchange="togWaterOpt(this.checked)" style="width:18px;height:18px"><span><b>💧 Water tracker</b><br><span style="font-size:11px;color:var(--muted)">Show a glasses-of-water tracker on my Today page</span></span></label></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 13 Oct 2026 - build 23</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 13 Oct 2026 - build 27</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
@@ -2215,23 +2218,41 @@ ge("nl-delete").addEventListener("click",function(){if(!nlEid||!confirm("Delete 
 
 var meDate2=null;
 function openMealM(dk){meDate2=dk;var pts=dk.split("-"),d=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]));ge("mm-title").textContent=((DATA.mealOpts&&(DATA.mealOpts.b||DATA.mealOpts.l))?"Meals for ":"Dinner for ")+d.toLocaleDateString([],{weekday:"long",day:"numeric",month:"long"});ge("mm-meal").value=(DATA.meals||{})[dk]||"";ge("mm-sug").innerHTML="";
+  ge("mm-date").value=dk;
+  var recs_=DATA.recipes||[];ge("mm-rec-wrap").style.display=recs_.length?"block":"none";
+  ge("mm-rec").innerHTML='<option value="">Choose a recipe...</option>'+recs_.map(function(r){return'<option value="'+esc(r.id)+'">'+esc(r.title)+'</option>';}).join("");
   var mo_=DATA.mealOpts||{};ge("mm-b-wrap").style.display=mo_.b?"block":"none";ge("mm-l-wrap").style.display=mo_.l?"block":"none";
   ge("mm-b").value=(DATA.mealsB||{})[dk]||"";ge("mm-l").value=(DATA.mealsL||{})[dk]||"";
   ge("mm-d-l").textContent=(mo_.b||mo_.l)?"Dinner":"What are you making?";
   openModal("m-meal");setTimeout(function(){ge("mm-meal").focus();},100);}
 ge("mm-meal").addEventListener("input",function(){var q=this.value,h=DATA.mealHistory||[],m=q?h.filter(function(x){return x.toLowerCase().indexOf(q.toLowerCase())>=0;}):h.slice(0,8);ge("mm-sug").innerHTML=m.length?'<div class="sug-box">'+m.map(function(x){return'<div class="sug-item" onclick="pmeal(\''+esc(x)+'\')">'+esc(x)+'</div>';}).join("")+'</div>':"";});
+function mmPickRec(){var r=(DATA.recipes||[]).find(function(x){return x.id===ge("mm-rec").value;});if(r){ge("mm-meal").value=r.title;ge("mm-sug").innerHTML="";}}
+function planRecipe(id){var r=(DATA.recipes||[]).find(function(x){return x.id===id;});if(!r)return;openMealM(tk());ge("mm-rec").value=id;ge("mm-meal").value=r.title;}
 function pmeal(m){ge("mm-meal").value=m;ge("mm-sug").innerHTML="";}
-ge("mm-save").addEventListener("click",function(){var meal=ge("mm-meal").value.trim();if(!DATA.meals)DATA.meals={};
+ge("mm-save").addEventListener("click",function(){if(ge("mm-date").value)meDate2=ge("mm-date").value;var meal=ge("mm-meal").value.trim();if(!DATA.meals)DATA.meals={};
   DATA.mealsB=DATA.mealsB||{};DATA.mealsL=DATA.mealsL||{};var mo_=DATA.mealOpts||{};
   if(mo_.b){var vb=ge("mm-b").value.trim();if(vb)DATA.mealsB[meDate2]=vb;else delete DATA.mealsB[meDate2];}
   if(mo_.l){var vl=ge("mm-l").value.trim();if(vl)DATA.mealsL[meDate2]=vl;else delete DATA.mealsL[meDate2];}if(meal){DATA.meals[meDate2]=meal;DATA.mealHistory=DATA.mealHistory||[];DATA.mealHistory=DATA.mealHistory.filter(function(m){return m.toLowerCase()!==meal.toLowerCase();});DATA.mealHistory.unshift(meal);if(DATA.mealHistory.length>200)DATA.mealHistory=DATA.mealHistory.slice(0,200);}else delete DATA.meals[meDate2];save();closeModal("m-meal");renderMeals();if(aPage==="today")renderToday();});
 ge("mm-meal").addEventListener("keydown",function(e){if(e.key==="Enter")ge("mm-save").click();});
 
+function importRecipeUrl(){
+  var u=ge("rm-url").value.trim(),msg=ge("rm-imp-msg"),btn=ge("rm-imp");
+  if(!u){msg.style.color="var(--red)";msg.textContent="Please paste a recipe link first.";return;}
+  msg.style.color="var(--muted)";msg.textContent="Reading the recipe...";btn.disabled=true;
+  fns.httpsCallable("importRecipe")({url:u}).then(function(res){
+    var d=res.data||{};
+    ge("rm-name").value=d.title||"";ge("rm-ingredients").value=fmtBullets(d.ingredients);ge("rm-method").value=fmtNumbered(d.method);ge("rm-link").value=d.sourceUrl||u;
+    msg.style.color="var(--green)";msg.textContent="Imported. Have a quick look below, then tap Save Recipe.";
+  }).catch(function(e){
+    msg.style.color="var(--red)";
+    msg.textContent=(e&&e.code&&e.code!=="functions/internal"&&e.code!=="functions/not-found-function"&&e.message)?e.message:"Could not import that link right now. You can type or paste the recipe in instead.";
+  }).then(function(){btn.disabled=false;});
+}
 function fmtBullets(arr){return (arr||[]).map(function(s){return "• "+s;}).join("\n");}
 function fmtNumbered(arr){return (arr||[]).map(function(s,i){return (i+1)+". "+s;}).join("\n");}
 function parseListLines(text){return text.split("\n").map(function(s){return s.trim().replace(/^[•\-\*]\s*/,"").replace(/^\d+[.)]\s*/,"").trim();}).filter(Boolean);}
-function openAR(){eRid=null;ge("rm-title").textContent="Add Recipe";ge("rm-name").value="";ge("rm-ingredients").value="";ge("rm-method").value="";ge("rm-link").value="";ge("rm-delete").style.display="none";openModal("m-recipe");setTimeout(function(){ge("rm-name").focus();},100);}
-function openER(id){var r=(DATA.recipes||[]).find(function(x){return x.id===id;});if(!r)return;eRid=id;ge("rm-title").textContent="Edit Recipe";ge("rm-name").value=r.title||"";ge("rm-ingredients").value=fmtBullets(r.ingredients);ge("rm-method").value=fmtNumbered(r.method);ge("rm-link").value=r.sourceUrl||"";ge("rm-delete").style.display="block";openModal("m-recipe");}
+function openAR(){eRid=null;ge("rm-url").value="";ge("rm-imp-msg").textContent="";ge("rm-imp-wrap").style.display="";ge("rm-title").textContent="Add Recipe";ge("rm-name").value="";ge("rm-ingredients").value="";ge("rm-method").value="";ge("rm-link").value="";ge("rm-delete").style.display="none";openModal("m-recipe");setTimeout(function(){ge("rm-name").focus();},100);}
+function openER(id){var r=(DATA.recipes||[]).find(function(x){return x.id===id;});if(!r)return;eRid=id;ge("rm-imp-wrap").style.display="none";ge("rm-title").textContent="Edit Recipe";ge("rm-name").value=r.title||"";ge("rm-ingredients").value=fmtBullets(r.ingredients);ge("rm-method").value=fmtNumbered(r.method);ge("rm-link").value=r.sourceUrl||"";ge("rm-delete").style.display="block";openModal("m-recipe");}
 ge("rm-save").addEventListener("click",function(){var t=ge("rm-name").value.trim();if(!t)return;var ing=parseListLines(ge("rm-ingredients").value);var mtd=parseListLines(ge("rm-method").value);var link=ge("rm-link").value.trim();DATA.recipes=DATA.recipes||[];if(eRid){var idx=DATA.recipes.findIndex(function(x){return x.id===eRid;});if(idx>=0)DATA.recipes[idx]={...DATA.recipes[idx],title:t,ingredients:ing,method:mtd,sourceUrl:link||null};}else DATA.recipes.push({id:uid(),title:t,ingredients:ing,method:mtd,sourceUrl:link||null});save();closeModal("m-recipe");renderMeals();});
 ge("rm-delete").addEventListener("click",function(){if(!eRid||!confirm("Delete recipe?"))return;DATA.recipes=(DATA.recipes||[]).filter(function(x){return x.id!==eRid;});save();closeModal("m-recipe");renderMeals();});
 
