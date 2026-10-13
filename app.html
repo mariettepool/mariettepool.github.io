@@ -151,9 +151,6 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 .achips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
 .achip{font-size:11px;font-weight:600;padding:4px 11px;border-radius:12px;cursor:pointer;border:1.5px solid transparent;}
 .achip.sel{border-color:currentColor!important;}
-.egrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:.5rem 0;}
-.eopt{height:36px;border-radius:8px;border:2px solid var(--border);background:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.eopt.sel{border-color:var(--red);background:var(--red-bg);}
 .cgrid{display:flex;gap:7px;flex-wrap:wrap;margin:.4rem 0;}
 .copt{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;}
 .copt.sel{border-color:#2F2F2F;transform:scale(1.2);}
@@ -163,7 +160,6 @@ body{font-family:'DM Sans',sans-serif;background:#FFFDF8;color:#2F2F2F;min-heigh
 .plan-card{border:2px solid var(--border);border-radius:var(--radius-lg);padding:1rem;margin-bottom:.75rem;cursor:pointer;text-align:left;}
 .plan-card.sel{border-color:var(--red);background:var(--red-bg);}
 .pay-btn{width:100%;padding:14px;border-radius:var(--radius-lg);border:none;background:var(--red);color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-top:1rem;}
-.kid-star{text-align:center;padding:1.25rem;background:linear-gradient(135deg,var(--mustard-bg),var(--red-bg));border-radius:var(--radius-lg);margin-bottom:.875rem;}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -1069,7 +1065,7 @@ function fetchFamOutlookCal(){
   .then(function(data){if(!data)return;famCalEvts=outlookEventsToInternal(data.value);renderAll();cacheFamEvents();})
   .catch(function(){});
 }
-function famEvOn(dt){
+function famEvOnRaw(dt){
   var y=dt.getFullYear(),mo=dt.getMonth(),da=dt.getDate(),d=new Date(y,mo,da);
   return(famCalEvts||[]).filter(function(ev){
     var s=new Date(ev.start.getFullYear(),ev.start.getMonth(),ev.start.getDate());
@@ -1321,7 +1317,7 @@ function appEvOnDay(e,dk){
   if(e.repeat==="yearly")return b[1]===a[1]&&b[2]===Math.min(a[2],dim);
   return e.date===dk;
 }
-function myTodayEvents(dt){
+function myTodayEventsRaw(dt){
   var dk=dkey(dt);
   var ae=(DATA.appEvents||[]).filter(function(e){
     if(!appEvOnDay(e,dk))return false;
@@ -1350,7 +1346,7 @@ function myTodayEvents(dt){
   }
   return gc.concat(ae).sort(function(a,b){return a.allDay&&!b.allDay?-1:!a.allDay&&b.allDay?1:a.start-b.start;});
 }
-function evOn(dt){
+function evOnRaw(dt){
   var y=dt.getFullYear(),mo=dt.getMonth(),da=dt.getDate(),d=new Date(y,mo,da);
   var gc=calEvts.filter(function(ev){
     var s=new Date(ev.start.getFullYear(),ev.start.getMonth(),ev.start.getDate());
@@ -1582,9 +1578,8 @@ function qAddShop(){var i=ge("qshop");if(!i)return;var v=i.value.trim();if(!v)re
 function togShopT(i){if(DATA.shoppingList[i]){DATA.shoppingList[i].done=!DATA.shoppingList[i].done;save();renderToday();}}
 function delShopT(i){DATA.shoppingList.splice(i,1);save();renderToday();}
 function delAE(id){DATA.appEvents=(DATA.appEvents||[]).filter(function(x){return x.id!==id;});save();renderAll();}
-function delTask(id){DATA.tasks=(DATA.tasks||[]).filter(function(x){return x.id!==id;});save();renderAll();}
 
-function renderFamily(){
+function renderFamilyRaw(){
   var dk=tk(),dt=new Date(),isPar=canEdit(),h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">👪 '+esc(DATA.familyName||"Family")+'</h2>';
 
   if(isFamilyProfile()){
@@ -1915,7 +1910,7 @@ function renderCalendar(){
   h+=catLegendHtml();
   ge("page-calendar").innerHTML=h;
 }
-function renderFamCalMonth(){
+function renderFamCalMonthRaw(){
   var showBack=!isFamilyProfile(),isKidView=activeP.role==="child",canAdd=canEdit();
   var h='<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">';
   if(showBack&&isKidView)h+='<button onclick="toggleKidFamView(false)" style="padding:8px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer">‹ Back</button>';
@@ -1941,32 +1936,6 @@ function renderFamCalMonth(){
     h+='</div>';
     if(sev.length&&canEdit())h+='<div style="font-size:11px;color:var(--muted);text-align:center;padding:0 .5rem .75rem">Tap an event to edit it.</div>';
   }
-  h+=catLegendHtml();ge("page-calendar").innerHTML=h;
-}
-function renderKidCalendar(){
-  var h='';
-  h+='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">📅 My Calendar</h2>';
-  h+='<div class="sec-hdr"><span class="sec-label" style="background:var(--blue-bg);color:var(--blue)">This week</span></div><div class="card blue">';
-  var today=new Date();today.setHours(0,0,0,0);var any=false;
-  for(var i=0;i<7;i++){
-    var d=new Date(today);d.setDate(d.getDate()+i);
-    var devts=evOn(d).filter(function(e){return e.isApp||e.isBday;}).concat(famEvOn(d).filter(function(e){return !e.isBday&&evHasPerson(e,activeP.name);}));
-    if(!devts.length)continue;
-    any=true;
-    h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 4px">'+(i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString([],{weekday:"long"}))+' · '+d.toLocaleDateString([],{day:"numeric",month:"short"})+'</div>';
-    devts.forEach(function(ev){
-      var col=evCol(ev);
-      h+='<div class="ev-row"><div class="ev-dot" style="border:2px solid '+col+';background:transparent"></div><span class="ev-name">'+esc(ev.name)+'</span>'+evTags(ev)+evCatSel(ev)+(!ev.allDay?'<span class="ev-time">'+new Date(ev.start).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'</span>':'')+'</div>';
-    });
-  }
-  if(!any)h+='<div class="empty">No events this week.</div>';
-  h+='</div>';
-  var y=moCur.getFullYear(),mo=moCur.getMonth(),fd=new Date(y,mo,1),off=(fd.getDay()+6)%7,gs=new Date(y,mo,1-off),td=new Date();td.setHours(0,0,0,0);
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:.875rem 0 .625rem"><button onclick="moPrev()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">‹</button><span style="font-size:13px;font-weight:600">'+moCur.toLocaleDateString([],{month:"long",year:"numeric"})+'</span><button onclick="moNext()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:13px">›</button></div>';
-  h+='<div class="month-grid">'+DAYS.map(function(d){return'<div class="month-dow">'+d[0]+'</div>';}).join("");
-  for(var ci2=0;ci2<42;ci2++){var cd2=new Date(gs);cd2.setDate(gs.getDate()+ci2);var inM2=cd2.getMonth()===mo,isT2=cd2.getTime()===td.getTime();var cevts2=evOn(cd2).filter(function(e){return e.isApp;}).concat(famEvOn(cd2).filter(function(e){return evHasPerson(e,activeP.name);}));var clbls2=cevts2.slice(0,3).map(function(ev){var col=evCol(ev);return'<div class="mc-evt" style="background:'+col+'22;color:'+col+';border-left:3px solid '+evPCol(ev)+'">'+esc(ev.name.slice(0,12))+'</div>';}).join("");h+='<div class="mcell'+(inM2?"":" om")+(isT2?" today":"")+'"><div class="mc-date">'+cd2.getDate()+'</div>'+clbls2+(cevts2.length>3?'<div style="font-size:9px;color:var(--muted)">+'+(cevts2.length-3)+'</div>':'')+'</div>';}
-  h+='</div>';
-  h+='<button onclick="toggleKidFamView(true)" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px dashed var(--border);background:transparent;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-top:.75rem">👪 See the Family Calendar</button>';
   h+=catLegendHtml();ge("page-calendar").innerHTML=h;
 }
 function toggleKidFamView(v){kidFamView=v;renderCalendar();}
@@ -2077,7 +2046,7 @@ function delShopM(i){DATA.shoppingList.splice(i,1);save();renderMeals();}
 function clrDoneS(){DATA.shoppingList=(DATA.shoppingList||[]).filter(function(s){return !s.done;});save();renderMeals();}
 function addSI(){var i=ge("shopinp");if(!i)return;var v=i.value.trim();if(!v)return;if(!DATA.shoppingList)DATA.shoppingList=[];DATA.shoppingList.push({id:uid(),text:v,done:false});i.value="";save();renderMeals();}
 
-function renderSettings(){
+function renderSettingsRaw(){
   var h='<h2 style="font-family:\'Lora\',serif;font-size:21px;font-weight:400;margin-bottom:1rem">Settings</h2>';
   h+='<div class="card"><div class="card-hdr"><span class="card-hdr-title">Subscription</span></div><div class="crow">';
   if(isWL())h+='<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--green)">Tester access</div></div>';
@@ -2123,7 +2092,7 @@ function renderSettings(){
 if(activeP&&!isFamilyProfile())h+='<div class="card" style="padding:.75rem 1rem;margin-bottom:.75rem"><label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer"><input type="checkbox" '+(activeP.water?'checked':'')+' onchange="togWaterOpt(this.checked)" style="width:18px;height:18px"><span><b>💧 Water tracker</b><br><span style="font-size:11px;color:var(--muted)">Show a glasses-of-water tracker on my Today page</span></span></label></div>';
 h+='<button onclick="signOutAll()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--border);background:#fff;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem">Sign out completely</button>';
 h+='<button onclick="showProfiles()" style="width:100%;padding:13px;border-radius:var(--radius-lg);border:2px solid var(--red);background:var(--red-bg);color:var(--red);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.75rem">Switch Profile</button>';
-  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 13 Oct 2026 - build 27</div>';ge("page-settings").innerHTML=h;
+  h+='<div style="text-align:center;font-size:11px;color:var(--muted);margin:1.5rem 0 .5rem">App version: 13 Oct 2026 - build 28</div>';ge("page-settings").innerHTML=h;
   var fniEl=ge("fni");if(fniEl)fniEl.addEventListener("keydown",function(e){if(e.key==="Enter")saveFN();});
 }
 function saveFN(){DATA.familyName=ge("fni").value.trim()||"The Family";save();ge("fam-display").textContent=DATA.familyName;}
@@ -2272,9 +2241,6 @@ function signOutAll(){
 
 ge("auth-screen").className="screen active";
 
-// Family views never use personal categories: events keep each person's profile colour
-(function(){["renderFamily","renderFamCalMonth"].forEach(function(n){var f=window[n];if(typeof f!=="function")return;window[n]=function(){CAT_OFF=true;try{return f.apply(this,arguments);}finally{CAT_OFF=false;}};});})();
-
 // ── BIRTHDAYS: every profile with a birthday gets an all-day event on the calendars, and a banner on their own day ──
 function bdayEvents(dt){
   var out=[],m=dt.getMonth()+1,da=dt.getDate(),y=dt.getFullYear();
@@ -2303,10 +2269,22 @@ function bdayBanner(){
   others.forEach(function(p){h+='<div style="background:#FCE7F3;border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:.5rem;font-size:13px;color:#BE185D;font-weight:600">🎂 It is '+esc(p.name)+'\'s birthday today!</div>';});
   return h;
 }
-(function(){["evOn","famEvOn","myTodayEvents"].forEach(function(n){var f=window[n];if(typeof f!=="function")return;window[n]=function(dt){var r=f.apply(this,arguments);
-  if(n==="evOn"&&activeP&&activeP.role==="child"&&!isFamilyProfile()){var ex=window.famEvOn(dt).filter(function(e){return !e.isBday&&evHasPerson(e,activeP.name);});r=r.concat(ex).sort(function(a,b){return a.allDay&&!b.allDay?-1:!a.allDay&&b.allDay?1:a.start-b.start;});}
-  var b=bdayEvents(dt);return b.length?b.concat(r):r;};});})();
-(function(){var f=window.renderSettings;if(typeof f!=="function")return;window.renderSettings=function(){if(activeP&&activeP.role==="child"&&!isFamilyProfile()){renderAll();return;}return f.apply(this,arguments);};})();
+function famEvOn(dt){var b=bdayEvents(dt),r=famEvOnRaw(dt);return b.length?b.concat(r):r;}
+function myTodayEvents(dt){var b=bdayEvents(dt),r=myTodayEventsRaw(dt);return b.length?b.concat(r):r;}
+function evOn(dt){
+  var r=evOnRaw(dt);
+  // a kid also sees family-calendar events tagged with their name
+  if(activeP&&activeP.role==="child"&&!isFamilyProfile()){
+    var ex=famEvOn(dt).filter(function(e){return !e.isBday&&evHasPerson(e,activeP.name);});
+    r=r.concat(ex).sort(function(a,b){return a.allDay&&!b.allDay?-1:!a.allDay&&b.allDay?1:a.start-b.start;});
+  }
+  var b=bdayEvents(dt);return b.length?b.concat(r):r;
+}
+// Family views never use personal categories: events keep each person's profile colour
+function renderFamily(){CAT_OFF=true;try{return renderFamilyRaw();}finally{CAT_OFF=false;}}
+function renderFamCalMonth(){CAT_OFF=true;try{return renderFamCalMonthRaw();}finally{CAT_OFF=false;}}
+// Kids have no Settings page: send them back to their own view
+function renderSettings(){if(activeP&&activeP.role==="child"&&!isFamilyProfile()){renderAll();return;}return renderSettingsRaw();}
 </script>
 
 <div id="reward-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;padding:2rem">
